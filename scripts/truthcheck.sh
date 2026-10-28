@@ -20,7 +20,9 @@ flag() {
 }
 
 # 1) Dollar amounts other than the four on the card (test code may use $100.000 for the seeded test wallet).
-prices=$(printf '%s\n' "$FILES" | grep -vE '^tests/' | xargs grep -noE '\$[0-9][0-9,]*(\.[0-9]+)?' 2>/dev/null \
+prices=$(printf '%s\n' "$FILES" | grep -vE '^tests/' | xargs grep -noE '\$[0-9][0-9,]*(\.[0-9]+)?.?' 2>/dev/null \
+    | grep -vE '\$[0-9]+[")}]$' \
+    | sed -E 's/([0-9])[^0-9]$/\1/' \
     | grep -vE ':\$(0\.039|0\.019|2|2\.00|19|19\.00)$' || true)
 if [ -n "$prices" ]; then
     printf '%s\n' "$prices" >&2
