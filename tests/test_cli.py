@@ -23,7 +23,7 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_version() -> None:
     result = runner.invoke(app, ["version"])
-    assert result.exit_code == 0 and result.output.strip() == "0.1.0"
+    assert result.exit_code == 0 and result.output.strip() == "0.2.0"
 
 
 def test_no_key_is_exit_2(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,6 +83,17 @@ def test_documents_upload_text(api: respx.MockRouter, tmp_path: object) -> None:
         "filename": "hello",
     }
     assert "pages=1" in result.output
+
+
+def test_documents_upload_html(api: respx.MockRouter, tmp_path: object) -> None:
+    import pathlib
+
+    p = pathlib.Path(str(tmp_path)) / "letter.html"
+    p.write_text("<h1>Hello</h1>")
+    route = api.post("/v1/documents").respond(201, json=document(source="html", filename="letter"))
+    result = runner.invoke(app, ["documents", "upload", str(p)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(route.calls.last.request.content) == {"html": "<h1>Hello</h1>", "filename": "letter"}
 
 
 def test_quote_renders_amount(api: respx.MockRouter) -> None:

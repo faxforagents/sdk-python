@@ -4,8 +4,9 @@
 The spec is the public document of https://github.com/faxforagents/openapi, copied into ``spec/`` so
 the build is hermetic. Every ``components.schemas`` entry becomes a ``BaseModel``. Response models
 allow extra fields (the API adds fields without a major version). Request models forbid them, as the
-server does (``additionalProperties: false``). A field named ``from`` is ``from_`` with the alias
-``from``. Nullable fields are ``X | None``. Enums are ``Literal``.
+server does (``additionalProperties: false``). A field named ``from``, or one that is an attribute of
+pydantic's BaseModel such as ``schema``, is ``from_`` or ``schema_`` with the alias ``from`` or
+``schema``. Nullable fields are ``X | None``. Enums are ``Literal``.
 
 Usage::
 
@@ -102,9 +103,19 @@ def py_type(schema: Any) -> str:
     return "Any"
 
 
+#: Names pydantic's BaseModel already uses. A field with one of them is written with a trailing
+#: underscore and its alias, like a keyword (``schema`` -> ``schema_``, alias ``schema``).
+RESERVED = frozenset(
+    {
+        "construct", "copy", "dict", "from_orm", "json", "parse_file", "parse_obj", "parse_raw", "schema",
+        "schema_json", "update_forward_refs", "validate",
+    }
+)
+
+
 def field_name(name: str) -> str:
     safe = re.sub(r"[^0-9a-zA-Z_]", "_", name)
-    if keyword.iskeyword(safe) or safe in ("model_config", "model_fields"):
+    if keyword.iskeyword(safe) or safe in RESERVED or safe.startswith("model_"):
         safe += "_"
     if safe[0].isdigit():
         safe = "f_" + safe

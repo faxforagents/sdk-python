@@ -205,6 +205,33 @@ def test_upload_runs_the_whole_pdf_path(client: Client, api: respx.MockRouter, t
     }
 
 
+def test_upload_names_the_image_type_from_the_filename(client: Client, api: respx.MockRouter) -> None:
+    data = b"\x89PNG fake"
+    session = {
+        "id": "upl_" + "5" * 32,
+        "status": "open",
+        "filename": "scan.png",
+        "content_type": "image/png",
+        "declared_size": len(data),
+        "received_size": 0,
+        "sha256": None,
+        "created_at": "2026-10-28T00:00:00Z",
+        "expires_at": "2026-10-28T01:00:00Z",
+        "completed_at": None,
+        "upload_url": f"{BASE}/v1/uploads/upl_5555/content?exp=1&sig=abc",
+        "upload_method": "PUT",
+        "upload_url_expires_at": "2026-10-28T00:10:00Z",
+    }
+    create = api.post("/v1/uploads").respond(201, json=session)
+    put = api.put("/v1/uploads/upl_5555/content").respond(200, json={**session, "received_size": len(data)})
+    api.post(f"/v1/uploads/{session['id']}/complete").respond(200, json={**session, "status": "completed"})
+    api.post("/v1/documents").respond(201, json=document(source="upload", upload_id=session["id"]))
+
+    client.documents.upload(data, filename="scan.png")
+    assert json.loads(create.calls.last.request.content)["content_type"] == "image/png"
+    assert put.calls.last.request.headers["content-type"] == "image/png"
+
+
 def test_wait_polls_until_terminal(client: Client, api: respx.MockRouter) -> None:
     route = api.get("/v1/faxes/fax_1")
     route.side_effect = [

@@ -20,7 +20,7 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit('the CLI needs the extra: pip install "faxforagents[cli]"') from exc
 
 from faxforagents import __version__
-from faxforagents.client import Client
+from faxforagents.client import CONTENT_TYPES, Client
 from faxforagents.errors import FaxForAgentsError
 
 app = typer.Typer(help="Fax for Agents", no_args_is_help=True, add_completion=False, rich_markup_mode=None)
@@ -166,18 +166,20 @@ def keys_revoke(key_id: str, as_json: bool = JSON) -> None:
 
 @documents_app.command("upload")
 def documents_upload(file: Path, as_json: bool = JSON) -> None:
-    """Create a document from a PDF, .txt or .md file."""
+    """Create a document from a PDF, an image (PNG, JPG, TIFF), an HTML, .txt or .md file."""
 
     def go() -> Any:
         ffa = _client()
         suffix = file.suffix.lower()
-        if suffix == ".pdf":
+        if suffix in CONTENT_TYPES:
             return ffa.documents.upload(file)
+        if suffix in (".html", ".htm"):
+            return ffa.documents.create(html=file.read_text("utf-8"), filename=file.stem)
         if suffix in (".md", ".markdown"):
             return ffa.documents.create(markdown=file.read_text("utf-8"), filename=file.stem)
         if suffix in (".txt", ""):
             return ffa.documents.create(text=file.read_text("utf-8"), filename=file.stem)
-        err.print(f"unsupported file type {suffix}: send .pdf, .txt or .md")
+        err.print(f"unsupported file type {suffix}: send .pdf, .png, .jpg, .tiff, .html, .txt or .md")
         raise typer.Exit(2)
 
     _emit(

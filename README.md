@@ -51,8 +51,11 @@ The same in async form, with `AsyncClient` and `await` on every call.
 - 429 and 5xx answers are retried up to three times. `Retry-After` is honoured. Connection errors and
   timeouts are retried the same way.
 - Every list has an `iter` twin that follows `next_cursor`.
-- `documents.upload(path)` runs the whole PDF path: the upload session, the signed PUT, the sha256
-  check, the document.
+- `documents.create(text=...)`, `markdown=...` or `html=...` renders on the server. HTML prints with
+  scripts off and no network, inline CSS and `data:` images only, at most 2 MiB.
+- `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF): the
+  upload session, the signed PUT with the content type read from the filename, the sha256 check, the
+  document. An image becomes gray letter pages.
 - `faxes.wait(fax_id)` and `approvals.wait(approval_id)` poll with a timeout.
 - `verify_webhook(secret, headers, body)` checks the Standard Webhooks signature on a delivery.
 - Models are pydantic v2, generated from the public OpenAPI document. Money is an integer count of
@@ -78,7 +81,11 @@ each call needs.
 | `ffa.approvals` | `request`, `request_help`, `list`, `iter`, `get`, `wait`, `approve`, `reject`, `revoke` |
 | `ffa.policies` | `list`, `create`, `effective`, `get`, `update`, `list_versions`, `evaluate` |
 | `ffa.agents` | `list`, `create`, `get`, `update`, `create_key`, `activity` |
-| `ffa.inbox` | `list`, `iter`, `get` |
+| `ffa.inbox` | `list`, `iter`, `get`, `update`, `delete`, `get_download`, `download` |
+| `ffa.numbers` | `coverage`, `inventory`, `create_order`, `get_order`, `list`, `get`, `update`, `release`, `check_portability`, `list_port_orders`, `create_port_order`, `get_port_order`, `create_port_out_request`, `verify_sender` |
+| `ffa.extractions` | `create`, `list`, `iter`, `get`, `correct`, `classify`, `list_classifications`, `iter_classifications`, `get_classification`, `summarize`, `list_summaries`, `iter_summaries`, `get_summary`, `list_schemas`, `create_schema`, `get_schema` |
+| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion` |
+| `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `revoke_invitation` |
 
 `ffa.request("GET", "/v1/anything")` reaches an operation the resources do not cover yet.
 
@@ -143,7 +150,7 @@ rotation two signatures arrive for 24 hours and either one verifies.
 
 ```bash
 export FAXFORAGENTS_API_KEY=ffa_test_...
-faxforagents documents upload letter.pdf
+faxforagents documents upload letter.pdf        # or .png, .jpg, .tiff, .html, .md, .txt
 faxforagents fax quote --document doc_... --to +15550000001
 faxforagents fax send --quote quote_... --wait
 faxforagents fax list --state failed

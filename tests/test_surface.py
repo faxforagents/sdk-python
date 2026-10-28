@@ -23,6 +23,10 @@ RESOURCES = [
     "policies",
     "agents",
     "inbox",
+    "numbers",
+    "extractions",
+    "organizations",
+    "members",
 ]
 
 
@@ -44,7 +48,7 @@ def test_resources_match() -> None:
         assert s.keys() == a.keys(), name
         for method in s:
             assert str(s[method]) == str(a[method]), f"{name}.{method}"
-            if method == "iter":
+            if method.startswith("iter"):
                 assert not inspect.iscoroutinefunction(getattr(async_cls, method))
             else:
                 assert inspect.iscoroutinefunction(getattr(async_cls, method)), f"{name}.{method}"
@@ -139,6 +143,48 @@ def test_every_operation_has_a_method() -> None:
         "get_agent_activity": "agents.activity",
         "list_inbox": "inbox.list",
         "get_inbox_item": "inbox.get",
+        "update_inbox_item": "inbox.update",
+        "delete_inbox_item": "inbox.delete",
+        "get_inbox_download": "inbox.get_download",
+        "get_inbox_content": "inbox.download",
+        "get_coverage": "numbers.coverage",
+        "get_number_inventory": "numbers.inventory",
+        "create_number_order": "numbers.create_order",
+        "get_number_order": "numbers.get_order",
+        "list_numbers": "numbers.list",
+        "get_number": "numbers.get",
+        "update_number": "numbers.update",
+        "create_release_request": "numbers.release",
+        "create_portability_check": "numbers.check_portability",
+        "list_port_orders": "numbers.list_port_orders",
+        "create_port_order": "numbers.create_port_order",
+        "get_port_order": "numbers.get_port_order",
+        "create_port_out_request": "numbers.create_port_out_request",
+        "create_sender_verification": "numbers.verify_sender",
+        "create_extraction": "extractions.create",
+        "list_extractions": "extractions.list",
+        "get_extraction": "extractions.get",
+        "create_correction": "extractions.correct",
+        "create_classification": "extractions.classify",
+        "list_classifications": "extractions.list_classifications",
+        "get_classification": "extractions.get_classification",
+        "create_document_summary": "extractions.summarize",
+        "list_document_summaries": "extractions.list_summaries",
+        "get_document_summary": "extractions.get_summary",
+        "list_extraction_schemas": "extractions.list_schemas",
+        "create_extraction_schema": "extractions.create_schema",
+        "get_extraction_schema": "extractions.get_schema",
+        "list_organizations": "organizations.list",
+        "get_current_organization": "organizations.current",
+        "update_current_organization": "organizations.update_current",
+        "request_data_export": "organizations.request_data_export",
+        "request_data_deletion": "organizations.request_data_deletion",
+        "list_members": "members.list",
+        "update_member": "members.update",
+        "remove_member": "members.remove",
+        "list_invitations": "members.list_invitations",
+        "create_invitation": "members.invite",
+        "revoke_invitation": "members.revoke_invitation",
     }
     ids = {op["operationId"] for ops in spec["paths"].values() for op in ops.values()}
     assert ids == set(covered), ids ^ set(covered)
