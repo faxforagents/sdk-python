@@ -1,0 +1,88 @@
+name: ci
+
+# Provenance: livetennisapi-oss/livetennisapi-python/.github/workflows/ci.yml (2026-10-28), actions pinned by SHA.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: py${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev,cli]"
+      - name: Unit tests (the live test skips without a key)
+        run: pytest -q -m "not live"
+
+  lint:
+    name: lint, types, generated models, truth pins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,cli]"
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy src
+      - name: models.py matches spec/openapi.yaml
+        run: python scripts/gen_models.py --check
+      - run: sh scripts/truthcheck.sh
+
+  build:
+    name: build and install the wheel in a clean environment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - name: The built wheel imports and the command runs
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install --quiet "$(ls dist/*.whl)[cli]"
+          /tmp/clean/bin/python -c "import faxforagents; print(faxforagents.__version__)"
+          /tmp/clean/bin/faxforagents version
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+
+  live:
+    name: sandbox send against api.faxforagents.com (needs the secret)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: Live test (skips when FAXFORAGENTS_API_KEY is not configured)
+        env:
+          FAXFORAGENTS_API_KEY: ${{ secrets.FAXFORAGENTS_TEST_KEY }}
+        run: pytest -q -m live
