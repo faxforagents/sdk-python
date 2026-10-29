@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.1.0
+  version: 1.2.3
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -1092,6 +1092,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
       x-llm:
         scope: fax:quote
         mutating: true
@@ -1198,6 +1206,14 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
           content:
             application/json:
               schema:
@@ -1549,6 +1565,14 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
           content:
             application/json:
               schema:
@@ -5597,6 +5621,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
       x-llm:
         scope: number:read
         mutating: false
@@ -5647,6 +5679,14 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
           content:
             application/json:
               schema:
@@ -5939,6 +5979,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
       x-llm:
         scope: number:buy
         mutating: true
@@ -5989,6 +6037,14 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
           content:
             application/json:
               schema:
@@ -6084,6 +6140,14 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: 'Live keys only: this server has no carrier configured, so live quotes, sends and number
+            operations are refused (live_provider_unavailable, retryable false). Nothing was held or consumed. Test
+            keys keep working against the sandbox.'
           content:
             application/json:
               schema:
@@ -11877,7 +11941,7 @@ components:
             code:
               type: string
               description: A stable code such as invalid_token, scope_missing, not_found, quote_expired, insufficient_balance,
-                approval_required, rate_limited.
+                approval_required, rate_limited, live_provider_unavailable.
             message:
               type: string
               description: One sentence a person can act on.
