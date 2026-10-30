@@ -1,0 +1,28 @@
+name: mirror to gitlab
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-gitlab
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: main and the tags land on gitlab.com/faxforagents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Push main and the tags
+        env:
+          GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+          REPO: ${{ github.event.repository.name }}
+        run: git push "https://oauth2:${GITLAB_MIRROR_TOKEN}@gitlab.com/faxforagents/${REPO}.git" "refs/remotes/origin/main:refs/heads/main" --tags

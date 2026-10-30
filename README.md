@@ -14,7 +14,8 @@
   <a href="https://faxforagents.com/mcp/">MCP</a> ·
   <a href="https://app.faxforagents.com">Dashboard</a> ·
   <a href="https://faxforagents.com/pricing/">Pricing</a> ·
-  <a href="https://faxforagents.com/changelog/">Changelog</a>
+  <a href="https://faxforagents.com/changelog/">Changelog</a> ·
+  <a href="https://gitlab.com/faxforagents/sdk-python">GitLab</a>
 </p>
 
 <p align="center">
