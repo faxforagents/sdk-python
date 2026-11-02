@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.5.2
+  version: 1.6.0
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -14178,3 +14178,249 @@ components:
       - passkeys
       - providers
       title: Me
+    Client:
+      properties:
+        id:
+          type: string
+          title: Id
+        client_id:
+          type: string
+          title: Client Id
+        kind:
+          type: string
+          enum:
+          - static
+          - dynamic
+          - cimd
+          title: Kind
+        client_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Name
+        client_host:
+          type: string
+          title: Client Host
+        created_at:
+          type: string
+          title: Created At
+        last_used_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Used At
+        disabled_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Disabled At
+        disabled_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Disabled Reason
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - client_id
+      - kind
+      - client_name
+      - client_host
+      - created_at
+      - last_used_at
+      - disabled_at
+      - disabled_reason
+      title: Client
+    ClientList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Client'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+      additionalProperties: true
+      type: object
+      required:
+      - items
+      - total
+      title: ClientList
+    Grant:
+      properties:
+        id:
+          type: string
+          title: Id
+        org_id:
+          type: string
+          title: Org Id
+        organization:
+          type: string
+          title: Organization
+        user_id:
+          type: string
+          title: User Id
+        client_id:
+          type: string
+          title: Client Id
+        client_host:
+          type: string
+          title: Client Host
+        client_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Name
+        environment:
+          type: string
+          enum:
+          - test
+          - live
+          title: Environment
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+        created_at:
+          type: string
+          title: Created At
+        last_used_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Used At
+        revoked_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Revoked At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - org_id
+      - organization
+      - user_id
+      - client_id
+      - client_host
+      - client_name
+      - environment
+      - scopes
+      - created_at
+      - last_used_at
+      - revoked_at
+      title: Grant
+    GrantList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Grant'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      additionalProperties: true
+      type: object
+      required:
+      - items
+      title: GrantList
+    ReviewAccessAction:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+          description: 'Why: recorded on the audit row'
+      additionalProperties: false
+      type: object
+      required:
+      - reason
+      title: ReviewAccessAction
+    ReviewAccessCreate:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+          description: 'Why: recorded on the audit row'
+        email:
+          type: string
+          format: email
+          title: Email
+        label:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Label
+          default: Directory review
+        ttl_days:
+          type: integer
+          maximum: 90.0
+          minimum: 1.0
+          title: Ttl Days
+          default: 30
+      additionalProperties: false
+      type: object
+      required:
+      - reason
+      - email
+      title: ReviewAccessCreate
+    ReviewAccessIssued:
+      properties:
+        id:
+          type: string
+          title: Id
+        email:
+          type: string
+          title: Email
+        label:
+          type: string
+          title: Label
+        code:
+          type: string
+          title: Code
+        expires_at:
+          type: string
+          title: Expires At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - email
+      - label
+      - code
+      - expires_at
+      title: ReviewAccessIssued
+    ReviewSignIn:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        code:
+          type: string
+          maxLength: 256
+          minLength: 1
+          format: password
+          title: Code
+          writeOnly: true
+      additionalProperties: false
+      type: object
+      required:
+      - email
+      - code
+      title: ReviewSignIn

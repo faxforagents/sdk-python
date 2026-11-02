@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3 (2026-11-02)
+
+Add `Grant`, `GrantList` and `ReviewSignIn` for connected apps and reviewer sign-in.
+Also declare `Client`, `ClientList`, `ReviewAccessAction`, `ReviewAccessCreate` and `ReviewAccessIssued`.
+Refresh the saved specification schemas to API 1.6.0.
+Retain existing model names, fields and optionality. The Python generator produces models only.
+
 ## 0.2.2 (2026-11-02)
 
 Regenerate models from API version 1.5.2, including the boolean `Capabilities.extraction` field.

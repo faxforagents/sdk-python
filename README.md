@@ -213,7 +213,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` contains all schemas from the live API version 1.5.2 document and the existing SDK operations.
+`spec/openapi.yaml` contains all schemas from the live API version 1.6.0 document and the existing SDK operations.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.
