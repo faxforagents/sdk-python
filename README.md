@@ -213,10 +213,11 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` is a copy of the public document. To take a new one, copy it over and run
-`uv run python scripts/gen_models.py`. Preserve the route-documented response additions when refreshing the snapshot.
-The snapshot covers existing SDK operations from API version 1.5.0 and retains the public model names.
-New response fields are optional so older payloads and existing callers remain valid.
+`spec/openapi.yaml` contains all schemas from the live API version 1.5.2 document and the existing SDK operations.
+It also retains earlier public model names and route-documented response additions.
+To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
+Keep new response fields optional so older payloads and existing callers remain valid.
+The schema drift test compares every saved schema property with the generated declarations without network access.
 
 ## Licence
 

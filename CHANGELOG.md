@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-11-02)
+
+Regenerate models from API version 1.5.2, including the boolean `Capabilities.extraction` field.
+Include all live schemas and retain existing model names, fields and optionality.
+Add a test that checks every saved schema property against the generated declarations.
+
 ## 0.2.1 (2026-11-02)
 
 Declare response fields from API version 1.5.0 and the server serializers.
