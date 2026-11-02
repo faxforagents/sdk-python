@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "id": "f8d0e5692abf",
+  "root": "/home/ben/Documents/ben-is-a-dev/faxforagents-oss/sdk-python",
+  "goal": "Fix SDK acceptance F02 F04 F07 and upload examples",
+  "mode": "fix",
+  "status": "active",
+  "created": "2026-11-02T04:26:34.828239+00:00",
+  "criteria": [
+    {
+      "text": "Production response fields and regression tests",
+      "evidence": null
+    },
+    {
+      "text": "Webhook alias and billing iterators",
+      "evidence": null
+    },
+    {
+      "text": "Repository gates and patch commit",
+      "evidence": null
+    }
+  ],
+  "fingerprints": {
+    ".github/workflows/ci.yml": "6bc57b20be0850299ae23e1cea121ba076cf536a1a74d26d983b99264a73b2d5",
+    ".github/workflows/mirror-gitlab.yml": "67209c82548f62955f97437e6791ec0f85967d677f07d8f366cce88464fb55f4",
+    ".github/workflows/publish.yml": "df07c26d62f56e2be11793eb6f42f1c58230d5a04c7905c36e4b70733c6c2577",
+    ".gitignore": "f5586473b7116e2b287e1906127d37c8e405c07d0db0f16c7efd2703e301e21e",
+    ".python-version": "7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d",
+    "CHANGELOG.md": "47b3616ed8013362947a5cdb72d35763a54a04c98f7bb3c5170861e9d84ac44f",
+    "LICENSE": "01d12b0ccb43587fc4f67725591a0c2e04b4a6f7043ed41aaf953807761b618b",
+    "README.md": "4509e5dcc59a7c481036990d3ad694444c4ea490b1cad1fc066c7112df5ef08d",
+    "SECURITY.md": "a5061755afbac958cbcdc6819dd1933aaa5c41bc09d8b1524ebab93a834c04a1",
+    "pyproject.toml": "539c903926a9a293f8c46e71f478aa077550176868e8ed04b4feffa23b83c773",
+    "scripts/gen_models.py": "2763b7a9fd3db5db9e2d20920ecfca8f80979e6d8d6ddc4e4c9ec4a8b48458a3",
+    "scripts/truthcheck.sh": "35e8a360b96176145dca50a70130d86110fe674a75e00d7e98f13015ddc28a01",
+    "spec/openapi.yaml": "44ad09d1e3d015db0e155991fc6fc326bc577c607ddc0013bd2b6e68ef14a90f",
+    "src/faxforagents/__init__.py": "dcaf8a6e8b18f68ff58419b101eff72f00b6ed28b267c462f6d17d658e6191b5",
+    "src/faxforagents/_http.py": "d1d57591a612b6d0829c4c59eeee96b68f48234c3f21a8f85d91bfc20f9ade49",
+    "src/faxforagents/async_client.py": "781a1f986107895016103313fd1b115c0103eeee9aa5c36e195881a359e2d330",
+    "src/faxforagents/cli.py": "c2db4d7991a9f297643770e09b8cffbd9569c9a963afe950315042cd0722efd0",
+    "src/faxforagents/client.py": "d20af708e314f82c8684d8c4ba0091685a4588495f1160e081f3c273c79ae6f9",
+    "src/faxforagents/errors.py": "2930ac9062aefcda3ea3758d7f8fe3be8f94d56fd53631cf04e0a55e72d00f55",
+    "src/faxforagents/models.py": "a241b32dfd26ed4f2b5f16a835685a7553dae6c491796185b9809bab525d1cb6",
+    "src/faxforagents/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/faxforagents/webhooks.py": "11b3e8f47af17bbb524eb25b5300c4aadb77edc98b7d2d2b8c2338a853f72b82",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/conftest.py": "2a2a7583fb89c2a897bfde36ceba3be16f138f30b572404f94bdc8f1a0c4714d",
+    "tests/test_async.py": "0e5d64995d6f4c6ea0914d74f4e3c8ae19e009685cefcfedcaa6d25deda196fa",
+    "tests/test_cli.py": "33c7cf9886b10d3cf2c0ab7244833b725657447f497187454d9a3bf3c139e732",
+    "tests/test_client.py": "dc15956f7f1750c87155b75b41159254f5402b3e9ae4484f1fef2b24c0cd0ed8",
+    "tests/test_live.py": "807c404f5b6c25209e217e4716b3342fa4ffda3f16c71de0916ec073838e3c6f",
+    "tests/test_models.py": "01719f5c44ac33e1b0036f8d4e5cff86eaaf8c31dec4b604962d00518b2510cc",
+    "tests/test_pagination.py": "d8997333f80e010874b96cc69c052ce045bcf59b720ed6872b98d3606386f7e6",
+    "tests/test_surface.py": "cc48d936641d5ea416218961fa6707b9dd6e99e2ca18e4a563d6453cc4a80584",
+    "tests/test_webhooks.py": "a359379fb94e4c733c88e4b7b15e8bbd86018c00e5aebbf36f7a739af370ed56"
+  },
+  "evidence": [],
+  "findings": [],
+  "notes": [
+    "Implemented 21 optional response fields from OpenAPI 1.5.0 and serializers, webhook verify alias, sync and async billing iterators, JSON upload docs, version 0.2.1 and changelog. Final tests: 90 passed and 1 live skip. Ruff check and format, mypy (8 files), generator check, truthcheck and diff check passed. Build, twine and clean wheel import/CLI passed. All 132 prior model names and prior field schemas are unchanged. Fixtures are synthetic serializer-shaped responses because credentials and HTTP recordings are unavailable. Staging and the requested heredoc commit both failed because .git/index.lock is on a read-only filesystem. No push or publish."
+  ],
+  "updated": "2026-11-02T04:37:49.703216+00:00"
+}

@@ -1,0 +1,128 @@
+[
+  {
+    "name": "ledger",
+    "route": "/v1/ledger",
+    "pages": [
+      {
+        "items": [
+          {
+            "id": "le_2",
+            "txn_id": "txn_1",
+            "account": "available",
+            "amount_micro": -39000,
+            "kind": "fax_capture",
+            "ref_type": "fax_job",
+            "ref_id": "fax_1",
+            "memo": null,
+            "created_at": "2026-11-02T00:00:00Z"
+          }
+        ],
+        "next_cursor": "le_2"
+      },
+      {
+        "items": [
+          {
+            "id": "le_1",
+            "txn_id": "txn_1",
+            "account": "available",
+            "amount_micro": -39000,
+            "kind": "fax_capture",
+            "ref_type": "fax_job",
+            "ref_id": "fax_1",
+            "memo": null,
+            "created_at": "2026-11-02T00:00:00Z"
+          }
+        ],
+        "next_cursor": null
+      }
+    ]
+  },
+  {
+    "name": "topup_sessions",
+    "route": "/v1/topup-sessions",
+    "pages": [
+      {
+        "items": [
+          {
+            "id": "top_2",
+            "environment": "live",
+            "kind": "manual",
+            "amount_micro": 10000000,
+            "currency": "USD",
+            "status": "completed",
+            "url": null,
+            "stripe_session_id": "cs_fixture",
+            "stripe_payment_intent_id": "pi_fixture",
+            "auto_topup_id": null,
+            "error": null,
+            "created_at": "2026-11-02T00:00:00Z",
+            "expires_at": null,
+            "completed_at": "2026-11-02T00:00:00Z"
+          }
+        ],
+        "next_cursor": "top_2"
+      },
+      {
+        "items": [
+          {
+            "id": "top_1",
+            "environment": "live",
+            "kind": "manual",
+            "amount_micro": 10000000,
+            "currency": "USD",
+            "status": "completed",
+            "url": null,
+            "stripe_session_id": "cs_fixture",
+            "stripe_payment_intent_id": "pi_fixture",
+            "auto_topup_id": null,
+            "error": null,
+            "created_at": "2026-11-02T00:00:00Z",
+            "expires_at": null,
+            "completed_at": "2026-11-02T00:00:00Z"
+          }
+        ],
+        "next_cursor": null
+      }
+    ]
+  },
+  {
+    "name": "invoices",
+    "route": "/v1/invoices",
+    "pages": [
+      {
+        "items": [
+          {
+            "id": "inv_2",
+            "number": "FIXTURE-2",
+            "status": "paid",
+            "currency": "USD",
+            "amount_due_micro": 19000000,
+            "amount_paid_micro": 19000000,
+            "subscription_id": "sub_fixture",
+            "hosted_invoice_url": null,
+            "invoice_pdf": null,
+            "created_at": "2026-11-02T00:00:00Z"
+          }
+        ],
+        "next_cursor": "inv_2"
+      },
+      {
+        "items": [
+          {
+            "id": "inv_1",
+            "number": "FIXTURE-2",
+            "status": "paid",
+            "currency": "USD",
+            "amount_due_micro": 19000000,
+            "amount_paid_micro": 19000000,
+            "subscription_id": "sub_fixture",
+            "hosted_invoice_url": null,
+            "invoice_pdf": null,
+            "created_at": "2026-11-02T00:00:00Z"
+          }
+        ],
+        "next_cursor": null
+      }
+    ]
+  }
+]

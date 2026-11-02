@@ -174,6 +174,8 @@ def render_model(name: str, schema: dict[str, Any]) -> str:
         lines.append("    pass")
         return "\n".join(lines) + "\n"
     for raw, prop in props.items():
+        if isinstance(prop, dict) and prop.get("x-sdk-route"):
+            lines.append(f"    # Returned by {prop['x-sdk-route']}.")
         pname = field_name(raw)
         ptype = py_type(prop)
         is_required = raw in required

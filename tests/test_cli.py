@@ -9,6 +9,7 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
+from faxforagents import __version__
 from faxforagents.cli import app
 from tests.conftest import BASE, KEY, document, fax_job, quote
 
@@ -23,7 +24,7 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_version() -> None:
     result = runner.invoke(app, ["version"])
-    assert result.exit_code == 0 and result.output.strip() == "0.2.0"
+    assert result.exit_code == 0 and result.output.strip() == __version__
 
 
 def test_no_key_is_exit_2(monkeypatch: pytest.MonkeyPatch) -> None:

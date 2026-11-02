@@ -384,6 +384,10 @@ class Billing(_Resource):
             "GET", "/v1/ledger", model=m.LedgerPage, params={"cursor": cursor, "limit": limit}
         )
 
+    def iter_ledger(self, *, limit: int | None = None) -> AsyncIterator[m.LedgerEntry]:
+        """Every ledger entry, following next_cursor."""
+        return apaginate(self.list_ledger, {"limit": limit})
+
     async def get_settings(self) -> m.BillingSettings:
         """Billing settings of the organization. Scope: billing:read."""
         return await self._h.request("GET", "/v1/billing-settings", model=m.BillingSettings)
@@ -417,6 +421,10 @@ class Billing(_Resource):
         return await self._h.request(
             "GET", "/v1/topup-sessions", model=m.TopupSessionPage, params={"cursor": cursor, "limit": limit}
         )
+
+    def iter_topup_sessions(self, *, limit: int | None = None) -> AsyncIterator[m.TopupSession]:
+        """Every top-up session, following next_cursor."""
+        return apaginate(self.list_topup_sessions, {"limit": limit})
 
     async def get_topup_session(self, topup_session_id: str) -> m.TopupSession:
         """Read a top-up session. Scope: billing:read."""
@@ -489,6 +497,10 @@ class Billing(_Resource):
         return await self._h.request(
             "GET", "/v1/invoices", model=m.InvoicePage, params={"cursor": cursor, "limit": limit}
         )
+
+    def iter_invoices(self, *, limit: int | None = None) -> AsyncIterator[m.Invoice]:
+        """Every invoice, following next_cursor."""
+        return apaginate(self.list_invoices, {"limit": limit})
 
     async def get_invoice(self, invoice_id: str) -> m.Invoice:
         """One invoice. Scope: billing:read."""

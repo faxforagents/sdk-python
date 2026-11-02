@@ -1,0 +1,412 @@
+[
+  {
+    "model": "FaxJob",
+    "route": "GET /v1/faxes/{fax_id}",
+    "body": {
+      "id": "fax_11111111111111111111111111111111",
+      "environment": "test",
+      "direction": "outbound",
+      "state": "queued",
+      "failure_code": null,
+      "to": "+15550000001",
+      "from": null,
+      "route": "us_ca",
+      "document_id": "doc_22222222222222222222222222222222",
+      "document_sha256": "abababababababababababababababababababababababababababababababab",
+      "transmitted_sha256": null,
+      "quote_id": "quote_33333333333333333333333333333333",
+      "billable_pages": 1,
+      "cover_pages": 0,
+      "pages_sent": 0,
+      "amount_micro": 0,
+      "captured_micro": 0,
+      "currency": "USD",
+      "provider": "sandbox",
+      "provider_ref": null,
+      "attempt_count": 0,
+      "client_reference": null,
+      "evidence": null,
+      "created_at": "2026-10-28T00:00:00Z",
+      "updated_at": "2026-10-28T00:00:00Z",
+      "completed_at": null,
+      "cancel_requested_at": null,
+      "approval_id": "apr_1",
+      "policy_version_id": null,
+      "one_time_order_id": null,
+      "one_time": null
+    }
+  },
+  {
+    "model": "FaxJob",
+    "route": "GET /v1/faxes/{fax_id}",
+    "body": {
+      "id": "fax_11111111111111111111111111111111",
+      "environment": "test",
+      "direction": "outbound",
+      "state": "queued",
+      "failure_code": null,
+      "to": "+15550000001",
+      "from": null,
+      "route": "us_ca",
+      "document_id": "doc_22222222222222222222222222222222",
+      "document_sha256": "abababababababababababababababababababababababababababababababab",
+      "transmitted_sha256": null,
+      "quote_id": "quote_33333333333333333333333333333333",
+      "billable_pages": 1,
+      "cover_pages": 0,
+      "pages_sent": 0,
+      "amount_micro": 0,
+      "captured_micro": 0,
+      "currency": "USD",
+      "provider": "sandbox",
+      "provider_ref": null,
+      "attempt_count": 0,
+      "client_reference": null,
+      "evidence": null,
+      "created_at": "2026-10-28T00:00:00Z",
+      "updated_at": "2026-10-28T00:00:00Z",
+      "completed_at": null,
+      "cancel_requested_at": null,
+      "approval_id": null,
+      "policy_version_id": "polv_1",
+      "one_time_order_id": "oto_1",
+      "one_time": {
+        "order_id": "oto_1"
+      }
+    }
+  },
+  {
+    "model": "Quote",
+    "route": "POST /v1/fax-quotes",
+    "body": {
+      "id": "quote_33333333333333333333333333333333",
+      "environment": "test",
+      "document_id": "doc_22222222222222222222222222222222",
+      "document_sha256": "abababababababababababababababababababababababababababababababab",
+      "to": "+15550000001",
+      "from": null,
+      "route": "us_ca",
+      "document_pages": 1,
+      "cover_pages": 0,
+      "billable_pages": 1,
+      "amount_micro": 0,
+      "currency": "USD",
+      "price_version": "launch-v1",
+      "cover": null,
+      "authorization_required": false,
+      "warnings": [],
+      "expires_at": "2026-10-28T00:10:00Z",
+      "expired": false,
+      "consumed_by_job_id": null,
+      "created_at": "2026-10-28T00:00:00Z",
+      "pricing": "per_page",
+      "policy_evaluation": null
+    }
+  },
+  {
+    "model": "Quote",
+    "route": "GET /v1/fax-quotes/{quote_id}",
+    "body": {
+      "id": "quote_33333333333333333333333333333333",
+      "environment": "test",
+      "document_id": "doc_22222222222222222222222222222222",
+      "document_sha256": "abababababababababababababababababababababababababababababababab",
+      "to": "+15550000001",
+      "from": null,
+      "route": "us_ca",
+      "document_pages": 1,
+      "cover_pages": 0,
+      "billable_pages": 1,
+      "amount_micro": 0,
+      "currency": "USD",
+      "price_version": "launch-v1",
+      "cover": null,
+      "authorization_required": false,
+      "warnings": [],
+      "expires_at": "2026-10-28T00:10:00Z",
+      "expired": false,
+      "consumed_by_job_id": null,
+      "created_at": "2026-10-28T00:00:00Z",
+      "pricing": "per_page",
+      "policy_evaluation": {
+        "decision": "allow",
+        "rule": null,
+        "reason": "allowed",
+        "policy_id": "pol_1",
+        "policy_version_id": "polv_1",
+        "policy_name": "Fixture",
+        "version": 1,
+        "denials": []
+      }
+    }
+  },
+  {
+    "model": "Document",
+    "route": "GET /v1/documents/{document_id}",
+    "body": {
+      "id": "doc_22222222222222222222222222222222",
+      "environment": "test",
+      "status": "ready",
+      "source": "text",
+      "filename": "hello",
+      "content_type": "application/pdf",
+      "size_bytes": 1234,
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "page_count": 1,
+      "render_status": "rendered",
+      "render_reason": null,
+      "validation": {
+        "warnings": []
+      },
+      "upload_id": null,
+      "created_at": "2026-10-28T00:00:00Z",
+      "expires_at": null,
+      "deleted_at": null
+    }
+  },
+  {
+    "model": "Number",
+    "route": "GET /v1/numbers/{number_id}",
+    "body": {
+      "id": "num_1",
+      "environment": "test",
+      "e164": "+15550001001",
+      "country": "US",
+      "number_type": "local",
+      "locality": null,
+      "status": "active",
+      "label": null,
+      "project_id": null,
+      "inbound_webhook_id": null,
+      "inbound_status": "enabled",
+      "provider": "sandbox",
+      "monthly_micro": 0,
+      "currency": "USD",
+      "order_id": "nord_1",
+      "created_at": "2026-11-02T00:00:00Z",
+      "activated_at": "2026-11-02T00:00:00Z",
+      "renews_at": null,
+      "released_at": null
+    }
+  },
+  {
+    "model": "InboxItem",
+    "route": "GET /v1/inbox",
+    "body": {
+      "id": "in_1",
+      "environment": "test",
+      "from": null,
+      "to": "+15550000001",
+      "pages": 1,
+      "status": "received",
+      "document_id": "doc_1",
+      "number_id": null,
+      "project_id": null,
+      "partial_content": false,
+      "media_status": "stored",
+      "duration_secs": 12,
+      "provider": "sandbox",
+      "received_at": "2026-11-02T00:00:00Z",
+      "read_at": null,
+      "expires_at": null,
+      "amount_micro": 0,
+      "note": null
+    }
+  },
+  {
+    "model": "InboxItemSummary",
+    "route": "POST /v1/sandbox/inbound-faxes",
+    "body": {
+      "id": "in_1",
+      "environment": "test",
+      "from": null,
+      "to": "+15550000001",
+      "pages": 1,
+      "status": "received",
+      "document_id": "doc_1",
+      "number_id": null,
+      "project_id": null,
+      "partial_content": false,
+      "media_status": "stored",
+      "duration_secs": 12,
+      "provider": "sandbox",
+      "received_at": "2026-11-02T00:00:00Z",
+      "read_at": null,
+      "expires_at": null,
+      "amount_micro": 0,
+      "note": null
+    }
+  },
+  {
+    "model": "Balance",
+    "route": "GET /v1/balance",
+    "body": {
+      "environment": "test",
+      "currency": "USD",
+      "available_micro": 100000000,
+      "held_micro": 0
+    }
+  },
+  {
+    "model": "Policy",
+    "route": "GET /v1/policies/{policy_id}",
+    "body": {
+      "id": "pol_1",
+      "name": "Fixture",
+      "purpose": null,
+      "enabled": true,
+      "version": 1,
+      "current_version_id": "polv_1",
+      "rules": {},
+      "created_by": "user_1",
+      "created_at": "2026-11-02T00:00:00Z",
+      "updated_at": "2026-11-02T00:00:00Z"
+    }
+  },
+  {
+    "model": "Capabilities",
+    "route": "GET /v1/capabilities",
+    "body": {
+      "environment": "test",
+      "provider": "sandbox",
+      "send": true,
+      "receive": true,
+      "numbers": true,
+      "routes": [
+        "us_ca"
+      ],
+      "formats": [
+        "application/pdf"
+      ],
+      "max_pages": 50,
+      "max_upload_bytes": 25000000,
+      "price_version": "launch-v1",
+      "rates": {},
+      "scopes": [
+        "fax:read"
+      ],
+      "approvals": true,
+      "limits": {},
+      "one_time": {
+        "enabled": false,
+        "published": false,
+        "routes": [],
+        "max_document_pages": 10
+      }
+    }
+  },
+  {
+    "model": "ExtractionPage",
+    "route": "GET /v1/extractions/{extraction_id}",
+    "body": {
+      "page": 1,
+      "text": "Fixture text",
+      "confidence": 0.95,
+      "language": "en",
+      "words_count": 2,
+      "status": "ok",
+      "model": "sandbox",
+      "escalated": false,
+      "fast_read": true,
+      "strong_read": false,
+      "warnings": [],
+      "cost_micro": 0
+    }
+  },
+  {
+    "model": "UploadSession",
+    "route": "POST /v1/uploads/{upload_id}/complete",
+    "body": {
+      "id": "upl_1",
+      "status": "completed",
+      "filename": "fixture.pdf",
+      "content_type": "application/pdf",
+      "declared_size": 4,
+      "received_size": 4,
+      "sha256": null,
+      "created_at": "2026-11-02T00:00:00Z",
+      "expires_at": "2026-11-02T00:00:00Z",
+      "completed_at": "2026-11-02T00:00:00Z"
+    }
+  },
+  {
+    "model": "LedgerEntry",
+    "route": "GET /v1/ledger",
+    "body": {
+      "id": "le_2",
+      "txn_id": "txn_1",
+      "account": "available",
+      "amount_micro": -39000,
+      "kind": "fax_capture",
+      "ref_type": "fax_job",
+      "ref_id": "fax_1",
+      "memo": null,
+      "created_at": "2026-11-02T00:00:00Z"
+    }
+  },
+  {
+    "model": "TopupSession",
+    "route": "GET /v1/topup-sessions",
+    "body": {
+      "id": "top_2",
+      "environment": "live",
+      "kind": "manual",
+      "amount_micro": 10000000,
+      "currency": "USD",
+      "status": "completed",
+      "url": null,
+      "stripe_session_id": "cs_fixture",
+      "stripe_payment_intent_id": "pi_fixture",
+      "auto_topup_id": null,
+      "error": null,
+      "created_at": "2026-11-02T00:00:00Z",
+      "expires_at": null,
+      "completed_at": "2026-11-02T00:00:00Z"
+    }
+  },
+  {
+    "model": "Invoice",
+    "route": "GET /v1/invoices",
+    "body": {
+      "id": "inv_2",
+      "number": "FIXTURE-2",
+      "status": "paid",
+      "currency": "USD",
+      "amount_due_micro": 19000000,
+      "amount_paid_micro": 19000000,
+      "subscription_id": "sub_fixture",
+      "hosted_invoice_url": null,
+      "invoice_pdf": null,
+      "created_at": "2026-11-02T00:00:00Z"
+    }
+  },
+  {
+    "model": "PolicyEvaluation",
+    "route": "POST /v1/policy-evaluations",
+    "body": {
+      "decision": "allow",
+      "rule": null,
+      "reason": "allowed",
+      "policy_id": "pol_1",
+      "policy_version_id": "polv_1",
+      "policy_name": "Fixture",
+      "version": 1,
+      "denials": [],
+      "usage": {
+        "day_jobs": 1,
+        "day_amount_micro": 39000,
+        "month_jobs": 1,
+        "month_amount_micro": 39000
+      },
+      "plan": {
+        "to": "+15550000001",
+        "from": null,
+        "pages": 1,
+        "amount_micro": 0,
+        "document_source": "text",
+        "environment": "test"
+      },
+      "executed": false
+    }
+  }
+]

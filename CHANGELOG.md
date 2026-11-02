@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 (2026-11-02)
+
+Declare response fields from API version 1.5.0 and the server serializers.
+Add billing iterators for ledger entries, top-up sessions and invoices.
+Add `verify` as an alias of `verify_webhook`.
+Document the required JSON object for upload completion.
+
 ## 0.2.0 (2026-10-28)
 
 API version 1.1.0: HTML rendering and image uploads.

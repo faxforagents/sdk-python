@@ -113,6 +113,10 @@ def verify_webhook(
     raise SignatureError("no matching signature")
 
 
+#: Documented alias for callers using faxforagents.webhooks.verify.
+verify = verify_webhook
+
+
 def parse_event(body: bytes | str) -> WebhookEvent:
     """Parse a verified body. Call ``verify_webhook`` first."""
     raw = body.encode("utf-8") if isinstance(body, str) else bytes(body)

@@ -262,3 +262,14 @@ def test_download_follows_the_signed_url(client: Client, api: respx.MockRouter) 
 def test_raw_request_returns_json(client: Client, api: respx.MockRouter) -> None:
     api.get("/v1/anything").respond(200, json={"ok": True})
     assert client.request("GET", "/v1/anything") == {"ok": True}
+
+
+def test_complete_upload_sends_empty_json(client: Client, api: respx.MockRouter) -> None:
+    from pathlib import Path
+
+    cases = json.loads((Path(__file__).parent / "fixtures/responses.json").read_text())
+    upload = next(case["body"] for case in cases if case["model"] == "UploadSession")
+    route = api.post("/v1/uploads/upl_1/complete").respond(200, json=upload)
+    client.documents.complete_upload("upl_1")
+    assert route.calls.last.request.content == b"{}"
+    assert route.calls.last.request.headers["content-type"] == "application/json"

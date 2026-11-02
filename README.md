@@ -73,7 +73,8 @@ The same in async form, with `AsyncClient` and `await` on every call.
   `idempotency_key=` to pick your own.
 - 429 and 5xx answers are retried up to three times. `Retry-After` is honoured. Connection errors and
   timeouts are retried the same way.
-- Every list has an `iter` twin that follows `next_cursor`.
+- Cursor-paginated fax, document, event, approval, inbox, extraction and billing lists have iterators
+  that follow `next_cursor`.
 - `documents.create(text=...)`, `markdown=...` or `html=...` renders on the server. HTML prints with
   scripts off and no network, inline CSS and `data:` images only, at most 2 MiB.
 - `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF): the
@@ -83,6 +84,14 @@ The same in async form, with `AsyncClient` and `await` on every call.
 - `verify_webhook(secret, headers, body)` checks the Standard Webhooks signature on a delivery.
 - Models are pydantic v2, generated from the public OpenAPI document. Money is an integer count of
   USD micro-units (`39000` is $0.039). Timestamps are UTC strings.
+
+For raw HTTP upload completion, send a JSON object even when you omit the checksum.
+
+```bash
+curl -X POST "https://api.faxforagents.com/v1/uploads/$UPLOAD_ID/complete" \
+  -H "Authorization: Bearer $FAXFORAGENTS_API_KEY" \
+  -H "Content-Type: application/json" -d '{}'
+```
 
 ## Resources
 
@@ -98,7 +107,7 @@ each call needs.
 | `ffa.faxes` | `create`, `list`, `iter`, `get`, `wait`, `list_events`, `list_attempts`, `get_receipt`, `cancel` |
 | `ffa.webhooks` | `list`, `create`, `update`, `delete`, `rotate_secret`, `test`, `list_deliveries`, `replay_delivery` |
 | `ffa.events` | `list`, `iter` |
-| `ffa.billing` | `balance`, `list_ledger`, settings, top-ups, auto top-ups, budgets, `usage`, exports, invoices, subscriptions, `create_portal_session` |
+| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `usage`, exports, invoices, subscriptions, `create_portal_session` |
 | `ffa.platform` | `capabilities`, `service_status` |
 | `ffa.sandbox` | `list_scenarios`, `create_scenario`, `create_inbound_fax`, `reset` |
 | `ffa.approvals` | `request`, `request_help`, `list`, `iter`, `get`, `wait`, `approve`, `reject`, `revoke` |
@@ -169,6 +178,8 @@ event = parse_event(request.body)              # event.type is fax.delivered, fa
 Verify on the raw bytes. Store `event_id` to drop a redelivery you already handled. During a secret
 rotation two signatures arrive for 24 hours and either one verifies.
 
+`faxforagents.webhooks.verify` is an alias of `verify_webhook`. Both names accept the same arguments.
+
 ## The command
 
 ```bash
@@ -203,7 +214,9 @@ sh scripts/truthcheck.sh
 ```
 
 `spec/openapi.yaml` is a copy of the public document. To take a new one, copy it over and run
-`scripts/gen_models.py`.
+`uv run python scripts/gen_models.py`. Preserve the route-documented response additions when refreshing the snapshot.
+The snapshot covers existing SDK operations from API version 1.5.0 and retains the public model names.
+New response fields are optional so older payloads and existing callers remain valid.
 
 ## Licence
 

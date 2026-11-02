@@ -10,7 +10,7 @@ import json
 import pytest
 
 from faxforagents import SignatureError, parse_event, verify_webhook
-from faxforagents.webhooks import sign, signature_headers
+from faxforagents.webhooks import sign, signature_headers, verify
 
 SECRET = "whsec_" + base64.b64encode(b"k" * 24).decode()
 OTHER = "whsec_" + base64.b64encode(b"o" * 24).decode()
@@ -86,3 +86,11 @@ def test_parse_event() -> None:
     event = parse_event(BODY)
     assert event.type == "fax.delivered" and event.resource == {"type": "fax_job", "id": "fax_1"}
     assert event.data["pages_sent"] == 3
+
+
+def test_documented_verify_alias() -> None:
+    assert verify is verify_webhook
+    headers = signature_headers([SECRET], "evt_1", BODY, timestamp=NOW)
+    assert verify(SECRET, headers, BODY, now=NOW) == "evt_1"
+    with pytest.raises(SignatureError, match="no matching signature"):
+        verify(SECRET, headers, BODY + b" ", now=NOW)

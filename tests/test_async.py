@@ -49,3 +49,15 @@ async def test_async_iter_follows_cursor(aclient: AsyncClient, api: respx.MockRo
     assert ids == ["fax_a", "fax_b"]
     assert "cursor=c2" in str(route.calls.last.request.url)
     assert "state=failed" in str(route.calls.last.request.url)
+
+
+async def test_complete_upload_sends_empty_json(aclient: AsyncClient, api: respx.MockRouter) -> None:
+    import json
+    from pathlib import Path
+
+    cases = json.loads((Path(__file__).parent / "fixtures/responses.json").read_text())
+    upload = next(case["body"] for case in cases if case["model"] == "UploadSession")
+    route = api.post("/v1/uploads/upl_1/complete").respond(200, json=upload)
+    await aclient.documents.complete_upload("upl_1")
+    assert route.calls.last.request.content == b"{}"
+    assert route.calls.last.request.headers["content-type"] == "application/json"
