@@ -1,0 +1,16 @@
+# Weekly grouped dependency updates. Minor and patch bumps arrive as one PR
+# per ecosystem and directory. Majors come as their own PRs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions-minor:
+        update-types: [minor, patch]
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      pip-minor:
+        update-types: [minor, patch]
