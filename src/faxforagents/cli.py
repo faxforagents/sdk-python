@@ -221,6 +221,10 @@ def fax_quote(
     quality: str | None = typer.Option(
         None, "--quality", help="Resolution: standard, fine (default), superfine or ultra. Same price."
     ),
+    sender_name: str | None = typer.Option(None, "--sender-name", help="Station name in the fax header."),
+    delete_after_send: bool = typer.Option(
+        False, "--delete-after-send", help="Delete the document when the fax ends; the receipt stays."
+    ),
     as_json: bool = JSON,
 ) -> None:
     """Price a document to a destination."""
@@ -231,7 +235,14 @@ def fax_quote(
     }
     _emit(
         _run(
-            lambda: _client().quotes.create(document_id=document, to=to, cover=cover or None, quality=quality)
+            lambda: _client().quotes.create(
+                document_id=document,
+                to=to,
+                cover=cover or None,
+                quality=quality,
+                sender_name=sender_name,
+                delete_after_send=delete_after_send or None,
+            )
         ),
         as_json,
         lambda q: con.print(

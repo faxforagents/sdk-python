@@ -820,6 +820,8 @@ class FaxJob(_Response):
     billable_pages: int
     cover_pages: int
     quality: str = "fine"
+    sender_name: str | None = None
+    delete_after_send: bool = False
     pages_sent: int
     amount_micro: int
     captured_micro: int
@@ -1387,6 +1389,8 @@ class Quote(_Response):
     route_label: str = ""
     cover: dict[str, Any] | None
     quality: str = "fine"
+    sender_name: str | None = None
+    delete_after_send: bool = False
     authorization_required: bool
     warnings: list[dict[str, Any]]
     expires_at: str
@@ -1402,6 +1406,8 @@ class Quote(_Response):
 class QuoteCreate(_Request):
     document_id: str
     quality: Literal["standard", "fine", "superfine", "ultra"] = Field("fine", description="Fax resolution. standard is 204 by 98 dpi, fine (the default) 204 by 196, superfine 204 by 392; ultra asks the carrier for its best text setting. Same price at every level.")
+    sender_name: str | None = Field(None, description="The station name the carrier prints in the fax header next to the sending number. Letters, digits, spaces and - _ ~ ! . + only, at most 128 characters. Omit to show the number alone.")
+    delete_after_send: bool = Field(False, description="Delete the document and the transmitted copy the moment the fax ends in delivered, partial or failed. The job, its receipt and the carrier evidence stay.")
     to: str = Field(..., description="Destination in E.164, for example +12025550123.")
     from_: str | None = Field(None, alias="from", description="A number you own; omit for the shared pool.")
     cover: dict[str, Any] | None = Field(None, description="Cover sheet fields: to_name, from_name, subject, message. Counts as a page.")

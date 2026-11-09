@@ -214,6 +214,8 @@ class Quotes(_Resource):
         from_: str | None = None,
         cover: dict[str, str] | None = None,
         quality: str | None = None,
+        sender_name: str | None = None,
+        delete_after_send: bool | None = None,
         idempotency_key: str | None = None,
     ) -> m.Quote:
         """The exact price of one document to one E.164 destination, valid ten minutes. Scope: fax:quote.
@@ -222,6 +224,10 @@ class Quotes(_Resource):
         body: dict[str, Any] = {"document_id": document_id, "to": to, "from": from_, "cover": cover}
         if quality is not None:
             body["quality"] = quality
+        if sender_name is not None:
+            body["sender_name"] = sender_name
+        if delete_after_send is not None:
+            body["delete_after_send"] = delete_after_send
         return await self._h.request(
             "POST", "/v1/fax-quotes", model=m.Quote, json=body, idempotency_key=idempotency_key
         )

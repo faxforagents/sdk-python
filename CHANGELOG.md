@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5 (2026-11-09)
+
+`quotes.create` takes `sender_name` (the station name in the fax header) and `delete_after_send`. `Quote` and `FaxJob` carry both. The CLI has `--sender-name` and `--delete-after-send`. Needs API 1.12.0.
+
 ## 0.2.4 (2026-11-09)
 
 `quotes.create` takes `quality`: standard, fine (the default), superfine or ultra. `Quote` and `FaxJob` carry it. The CLI has `--quality`. Needs API 1.11.0; older servers refuse the field.

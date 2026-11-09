@@ -34,6 +34,7 @@ def test_request_models_refuse_unknown_fields() -> None:
         "to": "+1",
         "from": "+2",
         "quality": "fine",  # the resolution default travels with the request since 0.2.4
+        "delete_after_send": False,  # and the keep-the-document default since 0.2.5
     }
 
 
