@@ -9204,6 +9204,10 @@ components:
         cover_pages:
           type: integer
           title: Cover Pages
+        quality:
+          type: string
+          title: Quality
+          default: fine
         pages_sent:
           type: integer
           title: Pages Sent
@@ -10904,6 +10908,10 @@ components:
             type: object
           - type: 'null'
           title: Cover
+        quality:
+          type: string
+          title: Quality
+          default: fine
         authorization_required:
           type: boolean
           title: Authorization Required
@@ -10967,6 +10975,16 @@ components:
         document_id:
           type: string
           title: Document Id
+        quality:
+          type: string
+          enum:
+          - standard
+          - fine
+          - superfine
+          - ultra
+          title: Quality
+          description: Fax resolution. standard is 204 by 98 dpi, fine (the default) 204 by 196, superfine 204 by 392; ultra asks the carrier for its best text setting. Same price at every level.
+          default: fine
         to:
           type: string
           title: To

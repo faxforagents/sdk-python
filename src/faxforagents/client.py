@@ -226,10 +226,15 @@ class Quotes(_Resource):
         to: str,
         from_: str | None = None,
         cover: dict[str, str] | None = None,
+        quality: str | None = None,
         idempotency_key: str | None = None,
     ) -> m.Quote:
-        """The exact price of one document to one E.164 destination, valid ten minutes. Scope: fax:quote."""
-        body = {"document_id": document_id, "to": to, "from": from_, "cover": cover}
+        """The exact price of one document to one E.164 destination, valid ten minutes. Scope: fax:quote.
+
+        ``quality`` picks the resolution: standard, fine (the default), superfine or ultra. Same price."""
+        body: dict[str, Any] = {"document_id": document_id, "to": to, "from": from_, "cover": cover}
+        if quality is not None:
+            body["quality"] = quality
         return self._h.request(
             "POST", "/v1/fax-quotes", model=m.Quote, json=body, idempotency_key=idempotency_key
         )

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 (2026-11-09)
+
+`quotes.create` takes `quality`: standard, fine (the default), superfine or ultra. `Quote` and `FaxJob` carry it. The CLI has `--quality`. Needs API 1.11.0; older servers refuse the field.
+
 ## 0.2.3 (2026-11-02)
 
 Add `Grant`, `GrantList` and `ReviewSignIn` for connected apps and reviewer sign-in.

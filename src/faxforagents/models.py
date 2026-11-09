@@ -819,6 +819,7 @@ class FaxJob(_Response):
     quote_id: str | None
     billable_pages: int
     cover_pages: int
+    quality: str = "fine"
     pages_sent: int
     amount_micro: int
     captured_micro: int
@@ -1385,6 +1386,7 @@ class Quote(_Response):
     per_page_micro: int = 0
     route_label: str = ""
     cover: dict[str, Any] | None
+    quality: str = "fine"
     authorization_required: bool
     warnings: list[dict[str, Any]]
     expires_at: str
@@ -1399,6 +1401,7 @@ class Quote(_Response):
 
 class QuoteCreate(_Request):
     document_id: str
+    quality: Literal["standard", "fine", "superfine", "ultra"] = Field("fine", description="Fax resolution. standard is 204 by 98 dpi, fine (the default) 204 by 196, superfine 204 by 392; ultra asks the carrier for its best text setting. Same price at every level.")
     to: str = Field(..., description="Destination in E.164, for example +12025550123.")
     from_: str | None = Field(None, alias="from", description="A number you own; omit for the shared pool.")
     cover: dict[str, Any] | None = Field(None, description="Cover sheet fields: to_name, from_name, subject, message. Counts as a page.")

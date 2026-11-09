@@ -33,6 +33,7 @@ def test_request_models_refuse_unknown_fields() -> None:
         "document_id": "doc_1",
         "to": "+1",
         "from": "+2",
+        "quality": "fine",  # the resolution default travels with the request since 0.2.4
     }
 
 

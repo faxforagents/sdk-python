@@ -218,6 +218,9 @@ def fax_quote(
     cover_to: str | None = typer.Option(None, "--cover-to"),
     cover_subject: str | None = typer.Option(None, "--cover-subject"),
     cover_message: str | None = typer.Option(None, "--cover-message"),
+    quality: str | None = typer.Option(
+        None, "--quality", help="Resolution: standard, fine (default), superfine or ultra. Same price."
+    ),
     as_json: bool = JSON,
 ) -> None:
     """Price a document to a destination."""
@@ -227,7 +230,9 @@ def fax_quote(
         if v
     }
     _emit(
-        _run(lambda: _client().quotes.create(document_id=document, to=to, cover=cover or None)),
+        _run(
+            lambda: _client().quotes.create(document_id=document, to=to, cover=cover or None, quality=quality)
+        ),
         as_json,
         lambda q: con.print(
             f"{q.id} {q.billable_pages} page(s) ({q.cover_pages} cover) to {q.to}: {q.amount_micro} micro "
