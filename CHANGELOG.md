@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-10)
 
 The saved spec follows the public document at API 1.12.0, 134 operations. Models are regenerated from it.
 New calls: `faxes.get_receipt_pdf`, `numbers.list_orders`, `policies.get_auto_send`, `policies.set_auto_send` and `organizations.download_export_archive`.
