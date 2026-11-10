@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.13.1.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.13.2.
 # All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.13.1
+  version: 1.13.2
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)

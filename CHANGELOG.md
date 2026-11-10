@@ -5,7 +5,7 @@
 `identity.create_api_key` takes `connected_app` on both clients. A key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.
 The field is sent only when given, so existing calls send the same body. Needs API 1.12.0.
 
-The saved spec follows the public document at API 1.13.1. No operation or schema changed.
+The saved spec follows the public document at API 1.13.2. No operation or schema changed.
 
 ## 0.3.1 (2026-11-10)
 
