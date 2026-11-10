@@ -325,3 +325,21 @@ def test_revoke_oauth_grant(client: Client, api: respx.MockRouter) -> None:
     route = api.delete("/v1/oauth/grants/grant_1").respond(204)
     assert client.oauth.revoke_grant("grant_1", idempotency_key="k1") is None
     assert route.calls.last.request.headers["idempotency-key"] == "k1"
+
+
+def test_fax_list_filters_by_idempotency_key_in_the_query(client: Client, api: respx.MockRouter) -> None:
+    route = api.get("/v1/faxes").respond(200, json={"items": [], "next_cursor": None})
+    client.faxes.list(idempotency_key="order-42")
+    request = route.calls.last.request
+    assert str(request.url) == f"{BASE}/v1/faxes?idempotency_key=order-42"
+    assert "idempotency-key" not in request.headers
+
+
+def test_effective_policies_can_ask_about_another_principal(client: Client, api: respx.MockRouter) -> None:
+    route = api.get("/v1/policies/effective").respond(500, json=error("internal_error"))
+    with pytest.raises(Exception):  # noqa: B017, PT011  only the request matters here
+        Client(api_key=KEY, base_url=BASE, max_retries=0).policies.effective(connection_id="ogr_1")
+    assert str(route.calls.last.request.url) == f"{BASE}/v1/policies/effective?connection_id=ogr_1"
+    with pytest.raises(Exception):  # noqa: B017, PT011
+        Client(api_key=KEY, base_url=BASE, max_retries=0).policies.effective()
+    assert str(route.calls.last.request.url) == f"{BASE}/v1/policies/effective"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 (2026-11-10)
+
+`faxes.list` takes `idempotency_key`, a filter that finds the send made with that key.
+`policies.effective` takes `key_id`, `agent_id` or `connection_id` to ask about another principal. A connection id comes from `oauth.list_grants`.
+
 ## 0.3.0 (2026-11-10)
 
 The saved spec follows the public document at API 1.12.0, 134 operations. Models are regenerated from it.

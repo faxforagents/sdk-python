@@ -254,12 +254,20 @@ class Faxes(_Resource):
         )
 
     async def list(
-        self, *, state: str | None = None, cursor: str | None = None, limit: int | None = None
+        self,
+        *,
+        state: str | None = None,
+        idempotency_key: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
     ) -> m.FaxJobPage:
-        """Fax jobs, newest first. Scope: fax:read."""
-        return await self._h.request(
-            "GET", "/v1/faxes", model=m.FaxJobPage, params={"state": state, "cursor": cursor, "limit": limit}
-        )
+        """Fax jobs, newest first. Scope: fax:read.
+
+        ``idempotency_key`` finds the send made with that Idempotency-Key. It is a filter here, not a
+        header. An empty result does not prove no fax was sent.
+        """
+        params = {"state": state, "idempotency_key": idempotency_key, "cursor": cursor, "limit": limit}
+        return await self._h.request("GET", "/v1/faxes", model=m.FaxJobPage, params=params)
 
     def iter(self, *, state: str | None = None, limit: int | None = None) -> AsyncIterator[m.FaxJob]:
         """Every fax job, following next_cursor."""
@@ -705,9 +713,22 @@ class Policies(_Resource):
             "POST", "/v1/policies", model=m.Policy, json=body, idempotency_key=idempotency_key
         )
 
-    async def effective(self) -> m.EffectivePolicies:
-        """What this key is allowed to do alone, and whether a human is needed. Scope: policy:read."""
-        return await self._h.request("GET", "/v1/policies/effective", model=m.EffectivePolicies)
+    async def effective(
+        self,
+        *,
+        key_id: str | None = None,
+        agent_id: str | None = None,
+        connection_id: str | None = None,
+    ) -> m.EffectivePolicies:
+        """What a key is allowed to do alone, and whether a human is needed. Scope: policy:read.
+
+        With no argument the answer is for the calling key. Pass at most one of ``key_id``, ``agent_id``
+        or ``connection_id`` (a connected app, see ``oauth.list_grants``) to ask about another principal.
+        """
+        params = {"key_id": key_id, "agent_id": agent_id, "connection_id": connection_id}
+        return await self._h.request(
+            "GET", "/v1/policies/effective", model=m.EffectivePolicies, params=params
+        )
 
     async def get_auto_send(self) -> m.AutoSendSetting:
         """The auto-send setting for connected apps in this key's environment. Scope: policy:read."""
