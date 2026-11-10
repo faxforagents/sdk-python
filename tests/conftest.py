@@ -131,3 +131,22 @@ def error(code: str, message: str = "refused", **extra: Any) -> dict[str, Any]:
 
 def live_key() -> str | None:
     return os.environ.get("FAXFORAGENTS_API_KEY") or None
+
+
+def api_key_with_secret(**over: Any) -> dict[str, Any]:
+    base = {
+        "id": "key_" + "5" * 32,
+        "label": "gemini",
+        "prefix": "ffa_test_aaaaaaaa",
+        "environment": "test",
+        "project_id": "prj_1",
+        "agent_id": None,
+        "scopes": ["fax:send"],
+        "created_at": "2026-11-10T10:00:00Z",
+        "last_used_at": None,
+        "expires_at": None,
+        "revoked_at": None,
+        "rotated_from_id": None,
+        "secret": "ffa_test_" + "a" * 43,
+    }
+    return {**base, **over}

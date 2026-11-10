@@ -6,7 +6,7 @@ import httpx
 import respx
 
 from faxforagents import AsyncClient
-from tests.conftest import fax_job, quote
+from tests.conftest import api_key_with_secret, fax_job, quote
 
 
 async def test_async_send_and_wait(aclient: AsyncClient, api: respx.MockRouter) -> None:
@@ -85,3 +85,25 @@ async def test_async_receipt_pdf_and_auto_send(aclient: AsyncClient, api: respx.
 async def test_async_oauth_grants_iter(aclient: AsyncClient, api: respx.MockRouter) -> None:
     api.get("/v1/oauth/grants").respond(200, json={"items": [], "next_cursor": None})
     assert [g.id async for g in aclient.oauth.iter_grants()] == []
+
+
+async def test_async_create_api_key_sends_connected_app_only_when_given(
+    aclient: AsyncClient, api: respx.MockRouter
+) -> None:
+    import json
+
+    route = api.post("/v1/api-keys")
+    route.side_effect = [
+        httpx.Response(201, json=api_key_with_secret(connected_app=True)),
+        httpx.Response(201, json=api_key_with_secret()),
+    ]
+    made = await aclient.identity.create_api_key("gemini", connected_app=True, idempotency_key="k1")
+    assert made.connected_app is True
+    assert json.loads(route.calls.last.request.content) == {
+        "label": "gemini",
+        "environment": "test",
+        "connected_app": True,
+    }
+    assert route.calls.last.request.headers["idempotency-key"] == "k1"
+    assert (await aclient.identity.create_api_key("plain")).connected_app is False
+    assert "connected_app" not in json.loads(route.calls.last.request.content)

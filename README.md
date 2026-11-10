@@ -164,6 +164,15 @@ if req.status == "approved":
 An agent's own API key can never approve. `ffa.policies.evaluate(quote_id=...)` is a dry run that says
 whether a policy would allow the send.
 
+A key made for a connected app used over stdio, such as the Gemini CLI extension, is created with
+`connected_app=True`. The organization's auto-send setting (`ffa.policies.get_auto_send`) then binds it like
+an OAuth connection. An agent's key cannot carry the flag.
+
+```python
+key = ffa.identity.create_api_key("gemini", scopes=["fax:send"], connected_app=True)
+key.connected_app                              # True, also on ffa.identity.list_api_keys()
+```
+
 ## Webhooks
 
 ```python
