@@ -1,5 +1,5 @@
-# Fax for Agents API, refreshed from https://api.faxforagents.com/openapi.json on 2026-11-02.
-# All live schemas are included. Existing SDK routes, model names and serializer additions are retained.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.12.0.
+# All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
   title: Fax for Agents API
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.6.0
+  version: 1.12.0
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -65,6 +65,8 @@ tags:
   description: The organizations the caller belongs to, the current one, data export and deletion requests.
 - name: members
   description: Members of the organization, their roles and invitations.
+- name: oauth
+  description: 'Connected apps: the OAuth grants of the organization and their revocation.'
 security:
 - bearerAuth: []
 - apiKeyHeader: []
@@ -153,11 +155,11 @@ paths:
       summary: Create an API key (the secret is shown once)
       operationId: create_api_key
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApiKeyCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -195,6 +197,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: key:admin
         mutating: true
@@ -204,7 +216,9 @@ paths:
     post:
       tags:
       - identity
-      summary: 'Rotate a key: a new secret, the old one works for 24 more hours'
+      summary: Rotate an API key and preserve its expiry
+      description: The replacement keeps the original expires_at, including no expiry. The old secret works for
+        up to 24 hours, capped by its existing expiry.
       operationId: rotate_api_key
       parameters:
       - name: key_id
@@ -213,6 +227,15 @@ paths:
         schema:
           type: string
           title: Key Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '201':
           description: Successful Response
@@ -268,6 +291,15 @@ paths:
         schema:
           type: string
           title: Key Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -317,11 +349,11 @@ paths:
       summary: Create a bounded upload session
       operationId: create_upload
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UploadCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -359,6 +391,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: document:write
         mutating: true
@@ -395,6 +437,15 @@ paths:
           - type: string
           - type: 'null'
           title: Sig
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -435,12 +486,21 @@ paths:
         schema:
           type: string
           title: Upload Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UploadComplete'
+              default: {}
       responses:
         '200':
           description: Successful Response
@@ -496,6 +556,15 @@ paths:
         schema:
           type: string
           title: Upload Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -587,6 +656,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: document:write
         mutating: true
@@ -726,6 +805,15 @@ paths:
         schema:
           type: string
           title: Document Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -1050,11 +1138,11 @@ paths:
       summary: Price an exact document to one destination
       operationId: create_fax_quote
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/QuoteCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -1100,6 +1188,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: fax:quote
         mutating: true
@@ -1218,6 +1316,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: fax:send
         mutating: true
@@ -1239,6 +1347,20 @@ paths:
           - type: string
           - type: 'null'
           title: State
+      - name: idempotency_key
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 255
+          - type: 'null'
+          description: Find the send job using its Idempotency-Key. This lookup requires the stored replay record.
+            An empty result does not prove no fax was sent.
+          title: Idempotency Key
+        description: Find the send job using its Idempotency-Key. This lookup requires the stored replay record.
+          An empty result does not prove no fax was sent.
       - name: cursor
         in: query
         required: false
@@ -1532,6 +1654,15 @@ paths:
         schema:
           type: string
           title: Fax Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -1631,11 +1762,11 @@ paths:
       summary: Register a destination (secret shown once)
       operationId: create_webhook
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WebhookCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -1673,6 +1804,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: webhook:admin
         mutating: true
@@ -1691,6 +1832,15 @@ paths:
         schema:
           type: string
           title: Webhook Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -1751,6 +1901,15 @@ paths:
         schema:
           type: string
           title: Webhook Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -1806,6 +1965,15 @@ paths:
         schema:
           type: string
           title: Webhook Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -1861,6 +2029,15 @@ paths:
         schema:
           type: string
           title: Webhook Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '202':
           description: Successful Response
@@ -1998,6 +2175,15 @@ paths:
         schema:
           type: string
           title: Delivery Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '202':
           description: Successful Response
@@ -2272,11 +2458,11 @@ paths:
       summary: Change the billing email or the low-balance threshold
       operationId: patch_billing_settings
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BillingSettingsPatch'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -2314,6 +2500,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: billing:write
         mutating: true
@@ -2368,6 +2564,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: billing:write
         mutating: true
@@ -2494,6 +2700,69 @@ paths:
         idempotency_key: false
         agent_key_allowed: true
   /v1/auto-topups:
+    post:
+      tags:
+      - billing
+      summary: Opt in to auto top-up (threshold, amount, daily cap). The card is saved at the first payment
+      operationId: create_auto_topup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoTopupCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoTopup'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope billing:write (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      x-llm:
+        scope: billing:write
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
     get:
       tags:
       - billing
@@ -2535,59 +2804,6 @@ paths:
         mutating: false
         idempotency_key: false
         agent_key_allowed: true
-    post:
-      tags:
-      - billing
-      summary: Opt in to auto top-up (threshold, amount, daily cap). The card is saved at the first payment
-      operationId: create_auto_topup
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AutoTopupCreate'
-        required: true
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AutoTopup'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: No key, or a key that was revoked or expired (invalid_token).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '403':
-          description: The key lacks the scope billing:write (scope_missing).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Not an id of this organization, or it was deleted (not_found).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-      x-llm:
-        scope: billing:write
-        mutating: true
-        idempotency_key: true
-        agent_key_allowed: false
   /v1/auto-topups/{auto_topup_id}:
     delete:
       tags:
@@ -2601,6 +2817,15 @@ paths:
         schema:
           type: string
           title: Auto Topup Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -2691,11 +2916,11 @@ paths:
       summary: Create a daily or monthly cap for the organization, a project or an agent
       operationId: create_budget
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BudgetCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -2733,6 +2958,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: billing:write
         mutating: true
@@ -2751,6 +2986,15 @@ paths:
         schema:
           type: string
           title: Budget Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -2888,11 +3132,11 @@ paths:
       summary: Export usage as CSV behind a signed download
       operationId: create_usage_export
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UsageExportCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -2930,6 +3174,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: billing:read
         mutating: true
@@ -3200,6 +3454,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: billing:write
         mutating: true
@@ -3284,6 +3548,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: billing:write
         mutating: true
@@ -3409,11 +3683,11 @@ paths:
       summary: Select the outcome of the next sends
       operationId: create_sandbox_scenario
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SandboxScenarioCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -3451,6 +3725,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: sandbox:write
         mutating: true
@@ -3467,11 +3751,11 @@ paths:
         the ``fax.received`` event with its download reference, exactly as a carrier delivery (M8).
       operationId: create_sandbox_inbound_fax
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SandboxInboundCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -3509,6 +3793,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: sandbox:write
         mutating: true
@@ -3551,6 +3845,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: sandbox:write
         mutating: true
@@ -3641,11 +3945,11 @@ paths:
       summary: Rename the organization
       operationId: update_current_organization
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/OrganizationPatch'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -3683,6 +3987,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: member:admin
         mutating: true
@@ -3725,6 +4039,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: org:admin
         mutating: true
@@ -3767,6 +4091,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: org:admin
         mutating: true
@@ -3827,6 +4161,15 @@ paths:
         schema:
           type: string
           title: Member Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -3887,6 +4230,15 @@ paths:
         schema:
           type: string
           title: Member Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '204':
           description: Successful Response
@@ -3973,11 +4325,11 @@ paths:
       summary: Invite someone by email (a link that works for 7 days)
       operationId: create_invitation
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/InvitationCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -4015,6 +4367,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: member:admin
         mutating: true
@@ -4033,6 +4395,15 @@ paths:
         schema:
           type: string
           title: Invitation Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '204':
           description: Successful Response
@@ -4120,6 +4491,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: approval:request
         mutating: true
@@ -4258,7 +4639,7 @@ paths:
     post:
       tags:
       - approvals
-      summary: Approve the bound quote (a human with approval:decide, never the requester)
+      summary: Approve the bound quote (approval:decide, fresh session or independent API credential)
       operationId: approve_request
       parameters:
       - name: approval_id
@@ -4267,6 +4648,15 @@ paths:
         schema:
           type: string
           title: Approval Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -4328,6 +4718,15 @@ paths:
         schema:
           type: string
           title: Approval Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -4389,6 +4788,15 @@ paths:
         schema:
           type: string
           title: Approval Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -4485,11 +4893,11 @@ paths:
       summary: Create a delegated policy (version 1)
       operationId: create_policy
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PolicyCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -4527,6 +4935,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: policy:admin
         mutating: true
@@ -4538,6 +4956,45 @@ paths:
       - policies
       summary: What the calling API key is allowed to do alone, and whether a human is needed otherwise
       operationId: get_effective_policies
+      parameters:
+      - name: key_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[a-z]{2,8}_[0-9a-f]{32}$
+          - type: 'null'
+          description: An API key in your organization. Uses the key's environment. Choose either key_id or agent_id.
+          title: Key Id
+        description: An API key in your organization. Uses the key's environment. Choose either key_id or agent_id.
+      - name: agent_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[a-z]{2,8}_[0-9a-f]{32}$
+          - type: 'null'
+          description: An agent in your organization. Uses the current environment and excludes bindings to individual
+            keys.
+          title: Agent Id
+        description: An agent in your organization. Uses the current environment and excludes bindings to individual
+          keys.
+      - name: connection_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[a-z]{2,8}_[0-9a-f]{32}$
+          - type: 'null'
+          description: A connected app (an OAuth grant, GET /v1/oauth/grants) in your organization; a signed-in
+            person sees their own. Uses the connection's environment. Choose at most one of key_id, agent_id and
+            connection_id.
+          title: Connection Id
+        description: A connected app (an OAuth grant, GET /v1/oauth/grants) in your organization; a signed-in person
+          sees their own. Uses the connection's environment. Choose at most one of key_id, agent_id and connection_id.
       responses:
         '200':
           description: Successful Response
@@ -4545,6 +5002,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EffectivePolicies'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
         '401':
           description: No key, or a key that was revoked or expired (invalid_token).
           content:
@@ -4641,6 +5104,15 @@ paths:
         schema:
           type: string
           title: Policy Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -4751,11 +5223,11 @@ paths:
       summary: 'Dry run: would the calling key''s policies allow this send? Never executes'
       operationId: create_policy_evaluation
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PolicyEvaluationCreate'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -4793,6 +5265,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: policy:read
         mutating: true
@@ -4847,11 +5329,11 @@ paths:
       summary: Register an agent identity
       operationId: create_agent
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AgentCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -4889,6 +5371,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: agent:admin
         mutating: true
@@ -4961,6 +5453,15 @@ paths:
         schema:
           type: string
           title: Agent Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -5022,6 +5523,15 @@ paths:
         schema:
           type: string
           title: Agent Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -5289,6 +5799,15 @@ paths:
         schema:
           type: string
           title: Inbox Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -5349,6 +5868,15 @@ paths:
         schema:
           type: string
           title: Inbox Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       responses:
         '200':
           description: Successful Response
@@ -5639,13 +6167,17 @@ paths:
       tags:
       - numbers
       summary: Buy a number (the first month is held now, charged on activation)
+      description: Returns 201 with the created order, including when the carrier refuses the purchase. A refused
+        order has status failed and an error describing the carrier's reason. Its first-month hold is released and
+        nothing is charged. Reusing the same Idempotency-Key returns the same response body without another purchase.
+        An unconfirmed carrier response leaves the order pending for reconciliation.
       operationId: create_number_order
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/NumberOrderCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -5691,12 +6223,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: number:buy
         mutating: true
         idempotency_key: true
         agent_key_allowed: false
         hint: 'Spends money: the first month is held now and charged on activation. Never an agent key.'
+    get:
+      tags:
+      - numbers
+      summary: List your number orders
+      operationId: list_number_orders
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberOrderList'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope number:read (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: number:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
   /v1/number-orders/{order_id}:
     get:
       tags:
@@ -5875,6 +6458,15 @@ paths:
         schema:
           type: string
           title: Number Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -5936,6 +6528,15 @@ paths:
         schema:
           type: string
           title: Number Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -5999,11 +6600,11 @@ paths:
       summary: Can these numbers port in
       operationId: create_portability_check
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PortabilityCheckCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -6049,64 +6650,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: number:read
         mutating: true
         idempotency_key: true
         agent_key_allowed: true
   /v1/port-orders:
-    get:
-      tags:
-      - numbers
-      summary: Port orders and port-out requests
-      operationId: list_port_orders
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PortOrderList'
-        '401':
-          description: No key, or a key that was revoked or expired (invalid_token).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '403':
-          description: The key lacks the scope number:read (scope_missing).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Not an id of this organization, or it was deleted (not_found).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-      x-llm:
-        scope: number:read
-        mutating: false
-        idempotency_key: false
-        agent_key_allowed: true
     post:
       tags:
       - numbers
       summary: Request a port-in (handled with you)
       operationId: create_port_order
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PortOrderCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -6152,11 +6722,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: number:buy
         mutating: true
         idempotency_key: true
         agent_key_allowed: false
+    get:
+      tags:
+      - numbers
+      summary: Port orders and port-out requests
+      operationId: list_port_orders
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortOrderList'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope number:read (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: number:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
   /v1/port-orders/{port_id}:
     get:
       tags:
@@ -6219,11 +6840,11 @@ paths:
       summary: Note a port-out of one of your numbers
       operationId: create_port_out_request
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PortOutRequestCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -6261,6 +6882,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: number:buy
         mutating: true
@@ -6273,11 +6904,11 @@ paths:
       summary: Verify a number of yours as a sender (only numbers you own)
       operationId: create_sender_verification
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SenderVerificationCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -6315,6 +6946,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: number:buy
         mutating: true
@@ -6369,6 +7010,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: document:extract
         mutating: true
@@ -6525,6 +7176,15 @@ paths:
         schema:
           type: string
           title: Extraction Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       requestBody:
         required: true
         content:
@@ -6622,6 +7282,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: document:extract
         mutating: true
@@ -6812,6 +7482,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: document:extract
         mutating: true
@@ -7001,11 +7681,11 @@ paths:
       summary: Save a versioned extraction schema (the same name again is the next version)
       operationId: create_extraction_schema
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SchemaCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -7043,6 +7723,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
       x-llm:
         scope: document:extract
         mutating: true
@@ -7103,6 +7793,352 @@ paths:
         mutating: false
         idempotency_key: false
         agent_key_allowed: true
+  /v1/faxes/{fax_id}/receipt.pdf:
+    get:
+      tags:
+      - faxes
+      summary: The same receipt as a one-page PDF
+      operationId: get_fax_receipt_pdf
+      parameters:
+      - name: fax_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Fax Id
+      responses:
+        '200':
+          description: The receipt as a PDF
+          content:
+            application/pdf: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope fax:read (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: fax:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+  /v1/organization/export-archives/{token}:
+    get:
+      tags:
+      - organizations
+      summary: Download an organization archive with a signed link valid for 72 hours
+      operationId: download_export_archive
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Token
+      - name: exp
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Exp
+      - name: sig
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sig
+      responses:
+        '200':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: No such resource, or the signed link expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: signed-url
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+      security: []
+      description: 'No API key: the `exp` and `sig` query values come from the signed URL the API minted. The link
+        lives 72 hours.'
+  /v1/organizations/current/auto-send:
+    get:
+      tags:
+      - policies
+      - organizations
+      summary: Read the auto-send setting for connected apps in this environment
+      operationId: get_auto_send
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoSendSetting'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope policy:read (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: policy:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+    put:
+      tags:
+      - policies
+      - organizations
+      summary: Let connected apps send without asking, inside two limits (owner)
+      description: The environment comes from X-FFA-Environment. When enabled, every connected app of the organization
+        (OAuth connections such as ChatGPT or Claude, and API keys flagged connected_app) sends in that environment
+        with no approval per fax, inside the amount per fax and the faxes per day. A hosted integration the server
+        marks requires_human_approval still needs a person. The first enable creates a managed policy. Every later
+        save is a new policy version with its audit row. A browser session needs a sign-in from the last 15 minutes.
+      operationId: put_auto_send
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoSendUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoSendSetting'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope org:admin (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      x-llm:
+        scope: org:admin
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
+        hint: Needs org:admin and policy:admin together. Never an agent key.
+  /v1/oauth/grants:
+    get:
+      tags:
+      - oauth
+      summary: Your connected apps in this organization
+      operationId: list_oauth_grants
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope key:admin (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: key:admin
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: false
+        hint: Answers 404 while OAuth connections are not enabled on the server.
+  /v1/oauth/grants/{grant_id}:
+    delete:
+      tags:
+      - oauth
+      summary: Revoke a connected app
+      operationId: revoke_oauth_grant
+      parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Grant Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: No key, or a key that was revoked or expired (invalid_token).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The key lacks the scope key:admin (scope_missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: key:admin
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
 components:
   securitySchemes:
     bearerAuth:
@@ -7428,6 +8464,12 @@ components:
           - type: string
           - type: 'null'
           title: Rotated From Id
+        connected_app:
+          type: boolean
+          title: Connected App
+          description: The key belongs to a connected app used over stdio, such as the Gemini CLI extension. The
+            organization's auto-send setting (Settings, Connected apps) binds it like an OAuth connection.
+          default: false
       additionalProperties: true
       type: object
       required:
@@ -7473,6 +8515,12 @@ components:
             minimum: 1.0
           - type: 'null'
           title: Expires In Days
+        connected_app:
+          type: boolean
+          title: Connected App
+          description: 'This key is for a connected app such as the Gemini CLI extension: the auto-send setting
+            binds it. Not available on an agent''s key.'
+          default: false
       additionalProperties: false
       type: object
       required:
@@ -7549,6 +8597,12 @@ components:
           type: string
           title: Secret
           description: Shown once. Store it now; it cannot be read back.
+        connected_app:
+          type: boolean
+          title: Connected App
+          description: The key belongs to a connected app used over stdio, such as the Gemini CLI extension. The
+            organization's auto-send setting (Settings, Connected apps) binds it like an OAuth connection.
+          default: false
       additionalProperties: true
       type: object
       required:
@@ -7972,6 +9026,7 @@ components:
           anyOf:
           - type: string
             maxLength: 254
+            format: email
           - type: 'null'
           title: Billing Email
         low_balance_threshold_micro:
@@ -8561,6 +9616,8 @@ components:
           - type: 'null'
           title: Text
           description: Plain text rendered to a letter PDF.
+          examples:
+          - Hello from Fax for Agents
         markdown:
           anyOf:
           - type: string
@@ -8585,6 +9642,7 @@ components:
       type: object
       title: DocumentCreate
       required: []
+      description: Send exactly one of text, markdown, html or upload_id.
     DocumentPage:
       properties:
         items:
@@ -8694,6 +9752,12 @@ components:
             type: string
           type: array
           title: Rules Order
+        requires_human_approval:
+          type: boolean
+          title: Requires Human Approval
+          description: 'Server-set for hosted integration clients and their keys: every send needs a person''s approval,
+            whatever the policies say.'
+          default: false
       additionalProperties: true
       type: object
       required:
@@ -10466,6 +11530,13 @@ components:
         updated_at:
           type: string
           title: Updated At
+        managed:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Managed
+          description: connected_apps when a Settings switch (the auto-send setting) manages this policy. Such a
+            policy is read here and changed only through PUT /v1/organizations/current/auto-send.
       additionalProperties: true
       type: object
       required:
@@ -11001,7 +12072,10 @@ components:
           - superfine
           - ultra
           title: Quality
-          description: Fax resolution. standard is 204 by 98 dpi, fine (the default) 204 by 196, superfine 204 by 392; ultra asks the carrier for its best text setting. Same price at every level.
+          description: 'Fax resolution. standard is the fax standard''s 204 by 98 dpi, fine (the default) 204 by
+            196, superfine 204 by 392. ultra asks the carrier for its darkest text processing at the same superfine
+            resolution and takes longer to process: measured 2026-11-09, a page sent at ultra and one at superfine
+            both arrived as 1728 by 4112 pixels, 204 by 391 dpi. The price does not change. The job echoes the level.'
           default: fine
         sender_name:
           anyOf:
@@ -11009,11 +12083,15 @@ components:
             maxLength: 128
           - type: 'null'
           title: Sender Name
-          description: The station name the carrier prints in the fax header next to the sending number. Letters, digits, spaces and - _ ~ ! . + only, at most 128 characters. Omit to show the number alone.
+          description: The station name the carrier prints in the fax header, next to the sending number. Letters,
+            digits, spaces and - _ ~ ! . + only, at most 128 characters. Omit to show the number alone.
         delete_after_send:
           type: boolean
           title: Delete After Send
-          description: Delete the document and the transmitted copy the moment the fax ends in delivered, partial or failed. The job, its receipt and the carrier evidence stay.
+          description: 'Delete the document and the transmitted copy the moment the fax ends in delivered, partial
+            or failed. The job, its receipt and the carrier evidence stay; they hold no document content. A fax
+            that ends unknown keeps the document until a reconcile settles it. Default: keep the document for the
+            retention period.'
           default: false
         to:
           type: string
@@ -14472,3 +15550,82 @@ components:
       - email
       - code
       title: ReviewSignIn
+    AutoSendSetting:
+      properties:
+        environment:
+          type: string
+          enum:
+          - live
+          - test
+          title: Environment
+        enabled:
+          type: boolean
+          title: Enabled
+        max_amount_micro:
+          type: integer
+          title: Max Amount Micro
+          description: Amount per fax, at most, in micro-units of USD.
+        daily_max_jobs:
+          type: integer
+          title: Daily Max Jobs
+          description: Faxes per UTC day, at most, across every connected app.
+        policy_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Policy Id
+          description: The managed policy; null before the first enable.
+        version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Version
+      additionalProperties: true
+      type: object
+      required:
+      - environment
+      - enabled
+      - max_amount_micro
+      - daily_max_jobs
+      - policy_id
+      - version
+      title: AutoSendSetting
+      description: |-
+        The organization's auto-send setting for one environment: Settings, Connected apps, "Let connected
+        apps send without asking". Stored as the managed policy ``policy_id`` (docs/APPROVALS.md).
+    AutoSendUpdate:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        max_amount_micro:
+          type: integer
+          maximum: 1000000000000.0
+          minimum: 0.0
+          title: Max Amount Micro
+          description: Amount per fax, at most, in micro-units of USD (5000000 is five US dollars).
+          default: 5000000
+        daily_max_jobs:
+          type: integer
+          maximum: 100000.0
+          minimum: 1.0
+          title: Daily Max Jobs
+          description: Faxes per UTC day.
+          default: 20
+      additionalProperties: false
+      type: object
+      required:
+      - enabled
+      title: AutoSendUpdate
+    NumberOrderList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/NumberOrder'
+          type: array
+          title: Items
+      additionalProperties: true
+      type: object
+      required:
+      - items
+      title: NumberOrderList

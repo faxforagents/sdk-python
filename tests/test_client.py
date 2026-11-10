@@ -273,3 +273,55 @@ def test_complete_upload_sends_empty_json(client: Client, api: respx.MockRouter)
     client.documents.complete_upload("upl_1")
     assert route.calls.last.request.content == b"{}"
     assert route.calls.last.request.headers["content-type"] == "application/json"
+
+
+def test_receipt_pdf_returns_the_bytes(client: Client, api: respx.MockRouter) -> None:
+    api.get("/v1/faxes/fax_1/receipt.pdf").respond(
+        200, content=b"%PDF", headers={"content-type": "application/pdf"}
+    )
+    assert client.faxes.get_receipt_pdf("fax_1") == b"%PDF"
+
+
+def test_list_number_orders(client: Client, api: respx.MockRouter) -> None:
+    api.get("/v1/number-orders").respond(200, json={"items": []})
+    assert client.numbers.list_orders().items == []
+
+
+def auto_send(**over: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "environment": "test",
+        "enabled": False,
+        "max_amount_micro": 5000000,
+        "daily_max_jobs": 20,
+        "policy_id": None,
+        "version": None,
+    }
+    base.update(over)
+    return base
+
+
+def test_auto_send_read_and_set(client: Client, api: respx.MockRouter) -> None:
+    api.get("/v1/organizations/current/auto-send").respond(200, json=auto_send())
+    assert client.policies.get_auto_send().enabled is False
+    route = api.put("/v1/organizations/current/auto-send").respond(
+        200, json=auto_send(enabled=True, daily_max_jobs=5, policy_id="pol_1", version=1)
+    )
+    setting = client.policies.set_auto_send(enabled=True, daily_max_jobs=5)
+    assert setting.enabled is True and setting.version == 1
+    sent = route.calls.last.request
+    assert json.loads(sent.content) == {"enabled": True, "daily_max_jobs": 5}
+    assert len(sent.headers["idempotency-key"]) == 36
+
+
+def test_export_archive_download_sends_the_signed_values(client: Client, api: respx.MockRouter) -> None:
+    route = api.get("/v1/organization/export-archives/org_1.arc_1").respond(
+        200, content=b"PK", headers={"content-type": "application/zip"}
+    )
+    assert client.organizations.download_export_archive("org_1.arc_1", exp="1", sig="s") == b"PK"
+    assert "exp=1" in str(route.calls.last.request.url) and "sig=s" in str(route.calls.last.request.url)
+
+
+def test_revoke_oauth_grant(client: Client, api: respx.MockRouter) -> None:
+    route = api.delete("/v1/oauth/grants/grant_1").respond(204)
+    assert client.oauth.revoke_grant("grant_1", idempotency_key="k1") is None
+    assert route.calls.last.request.headers["idempotency-key"] == "k1"

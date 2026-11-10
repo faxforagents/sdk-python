@@ -27,6 +27,7 @@ RESOURCES = [
     "extractions",
     "organizations",
     "members",
+    "oauth",
 ]
 
 
@@ -84,6 +85,7 @@ def test_every_operation_has_a_method() -> None:
         "list_fax_events": "faxes.list_events",
         "list_fax_attempts": "faxes.list_attempts",
         "get_fax_receipt": "faxes.get_receipt",
+        "get_fax_receipt_pdf": "faxes.get_receipt_pdf",
         "cancel_fax": "faxes.cancel",
         "list_webhooks": "webhooks.list",
         "create_webhook": "webhooks.create",
@@ -131,6 +133,8 @@ def test_every_operation_has_a_method() -> None:
         "list_policies": "policies.list",
         "create_policy": "policies.create",
         "get_effective_policies": "policies.effective",
+        "get_auto_send": "policies.get_auto_send",
+        "put_auto_send": "policies.set_auto_send",
         "get_policy": "policies.get",
         "update_policy": "policies.update",
         "list_policy_versions": "policies.list_versions",
@@ -150,6 +154,7 @@ def test_every_operation_has_a_method() -> None:
         "get_coverage": "numbers.coverage",
         "get_number_inventory": "numbers.inventory",
         "create_number_order": "numbers.create_order",
+        "list_number_orders": "numbers.list_orders",
         "get_number_order": "numbers.get_order",
         "list_numbers": "numbers.list",
         "get_number": "numbers.get",
@@ -179,12 +184,15 @@ def test_every_operation_has_a_method() -> None:
         "update_current_organization": "organizations.update_current",
         "request_data_export": "organizations.request_data_export",
         "request_data_deletion": "organizations.request_data_deletion",
+        "download_export_archive": "organizations.download_export_archive",
         "list_members": "members.list",
         "update_member": "members.update",
         "remove_member": "members.remove",
         "list_invitations": "members.list_invitations",
         "create_invitation": "members.invite",
         "revoke_invitation": "members.revoke_invitation",
+        "list_oauth_grants": "oauth.list_grants",
+        "revoke_oauth_grant": "oauth.revoke_grant",
     }
     ids = {op["operationId"] for ops in spec["paths"].values() for op in ops.values()}
     assert ids == set(covered), ids ^ set(covered)

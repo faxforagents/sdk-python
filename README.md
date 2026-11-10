@@ -104,20 +104,21 @@ each call needs.
 | `ffa.identity` | `me`, `list_api_keys`, `create_api_key`, `rotate_api_key`, `revoke_api_key` |
 | `ffa.documents` | `create`, `upload`, `create_upload`, `put_upload_content`, `complete_upload`, `cancel_upload`, `list`, `iter`, `get`, `delete`, `get_validation`, `get_download`, `download`, `list_pages` |
 | `ffa.quotes` | `create`, `get` |
-| `ffa.faxes` | `create`, `list`, `iter`, `get`, `wait`, `list_events`, `list_attempts`, `get_receipt`, `cancel` |
+| `ffa.faxes` | `create`, `list`, `iter`, `get`, `wait`, `list_events`, `list_attempts`, `get_receipt`, `get_receipt_pdf`, `cancel` |
 | `ffa.webhooks` | `list`, `create`, `update`, `delete`, `rotate_secret`, `test`, `list_deliveries`, `replay_delivery` |
 | `ffa.events` | `list`, `iter` |
 | `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `usage`, exports, invoices, subscriptions, `create_portal_session` |
 | `ffa.platform` | `capabilities`, `service_status` |
 | `ffa.sandbox` | `list_scenarios`, `create_scenario`, `create_inbound_fax`, `reset` |
 | `ffa.approvals` | `request`, `request_help`, `list`, `iter`, `get`, `wait`, `approve`, `reject`, `revoke` |
-| `ffa.policies` | `list`, `create`, `effective`, `get`, `update`, `list_versions`, `evaluate` |
+| `ffa.policies` | `list`, `create`, `effective`, `get_auto_send`, `set_auto_send`, `get`, `update`, `list_versions`, `evaluate` |
 | `ffa.agents` | `list`, `create`, `get`, `update`, `create_key`, `activity` |
 | `ffa.inbox` | `list`, `iter`, `get`, `update`, `delete`, `get_download`, `download` |
-| `ffa.numbers` | `coverage`, `inventory`, `create_order`, `get_order`, `list`, `get`, `update`, `release`, `check_portability`, `list_port_orders`, `create_port_order`, `get_port_order`, `create_port_out_request`, `verify_sender` |
+| `ffa.numbers` | `coverage`, `inventory`, `create_order`, `list_orders`, `get_order`, `list`, `get`, `update`, `release`, `check_portability`, `list_port_orders`, `create_port_order`, `get_port_order`, `create_port_out_request`, `verify_sender` |
 | `ffa.extractions` | `create`, `list`, `iter`, `get`, `correct`, `classify`, `list_classifications`, `iter_classifications`, `get_classification`, `summarize`, `list_summaries`, `iter_summaries`, `get_summary`, `list_schemas`, `create_schema`, `get_schema` |
-| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion` |
+| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `download_export_archive` |
 | `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `revoke_invitation` |
+| `ffa.oauth` | `list_grants`, `iter_grants`, `revoke_grant` |
 
 `ffa.request("GET", "/v1/anything")` reaches an operation the resources do not cover yet.
 
@@ -213,7 +214,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` contains all schemas from the live API version 1.6.0 document and the existing SDK operations.
+`spec/openapi.yaml` follows the public document at API version 1.12.0 and keeps the schemas of the earlier live documents.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import uuid
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -301,6 +302,11 @@ class Faxes(_Resource):
     def get_receipt(self, fax_id: str) -> m.Receipt:
         """Delivery evidence as a receipt. Scope: fax:read."""
         return self._h.request("GET", f"/v1/faxes/{fax_id}/receipt", model=m.Receipt)
+
+    def get_receipt_pdf(self, fax_id: str) -> bytes:
+        """The same receipt as a one-page PDF. Scope: fax:read."""
+        data = self._h.request("GET", f"/v1/faxes/{fax_id}/receipt.pdf")
+        return bytes(data)
 
     def cancel(self, fax_id: str, *, idempotency_key: str | None = None) -> m.FaxJob:
         """Cancel while queued, best effort once sending. Scope: fax:cancel."""
@@ -696,6 +702,33 @@ class Policies(_Resource):
         """What this key is allowed to do alone, and whether a human is needed. Scope: policy:read."""
         return self._h.request("GET", "/v1/policies/effective", model=m.EffectivePolicies)
 
+    def get_auto_send(self) -> m.AutoSendSetting:
+        """The auto-send setting for connected apps in this key's environment. Scope: policy:read."""
+        return self._h.request("GET", "/v1/organizations/current/auto-send", model=m.AutoSendSetting)
+
+    def set_auto_send(
+        self,
+        *,
+        enabled: bool,
+        max_amount_micro: int | None = None,
+        daily_max_jobs: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> m.AutoSendSetting:
+        """Let connected apps send without asking, inside an amount per fax and a count per day.
+        Scope: org:admin and policy:admin, never an agent key."""
+        body: dict[str, Any] = {
+            "enabled": enabled,
+            "max_amount_micro": max_amount_micro,
+            "daily_max_jobs": daily_max_jobs,
+        }
+        return self._h.request(
+            "PUT",
+            "/v1/organizations/current/auto-send",
+            model=m.AutoSendSetting,
+            json=body,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
+        )
+
     def get(self, policy_id: str) -> m.Policy:
         """A policy at its current version. Scope: policy:read."""
         return self._h.request("GET", f"/v1/policies/{policy_id}", model=m.Policy)
@@ -847,6 +880,10 @@ class Numbers(_Resource):
     def get_order(self, order_id: str) -> m.NumberOrder:
         """Read a number order. Scope: number:read."""
         return self._h.request("GET", f"/v1/number-orders/{order_id}", model=m.NumberOrder)
+
+    def list_orders(self) -> m.NumberOrderList:
+        """Your number orders. Scope: number:read."""
+        return self._h.request("GET", "/v1/number-orders", model=m.NumberOrderList)
 
     def list(self, *, include_released: bool | None = None) -> m.NumberList:
         """Your numbers. Scope: number:read."""
@@ -1176,6 +1213,14 @@ class Organizations(_Resource):
             idempotency_key=idempotency_key,
         )
 
+    def download_export_archive(self, token: str, *, exp: str, sig: str) -> bytes:
+        """The organization archive of a data export. ``token``, ``exp`` and ``sig`` come from the signed
+        link, which lives 72 hours. The link is the credential."""
+        data = self._h.request(
+            "GET", f"/v1/organization/export-archives/{token}", params={"exp": exp, "sig": sig}
+        )
+        return bytes(data)
+
 
 class Members(_Resource):
     def list(self) -> m.MemberList:
@@ -1207,6 +1252,22 @@ class Members(_Resource):
     def revoke_invitation(self, invitation_id: str, *, idempotency_key: str | None = None) -> None:
         """Withdraw an invitation. Scope: member:admin, never an agent key."""
         self._h.request("DELETE", f"/v1/invitations/{invitation_id}", idempotency_key=idempotency_key)
+
+
+class Oauth(_Resource):
+    def list_grants(self, *, cursor: str | None = None, limit: int | None = None) -> m.GrantList:
+        """The organization's connected apps. Scope: key:admin, never an agent key."""
+        return self._h.request(
+            "GET", "/v1/oauth/grants", model=m.GrantList, params={"cursor": cursor, "limit": limit}
+        )
+
+    def iter_grants(self, *, limit: int | None = None) -> Iterator[m.Grant]:
+        """Every connected app, following next_cursor."""
+        return paginate(lambda p: self.list_grants(**p), {"limit": limit})
+
+    def revoke_grant(self, grant_id: str, *, idempotency_key: str | None = None) -> None:
+        """Revoke a connected app. Scope: key:admin, never an agent key."""
+        self._h.request("DELETE", f"/v1/oauth/grants/{grant_id}", idempotency_key=idempotency_key)
 
 
 class Client:
@@ -1242,6 +1303,7 @@ class Client:
         self.extractions = Extractions(self._h)
         self.organizations = Organizations(self._h)
         self.members = Members(self._h)
+        self.oauth = Oauth(self._h)
 
     def me(self) -> m.Me:
         """Shortcut for ``identity.me()``."""

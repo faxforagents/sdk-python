@@ -61,3 +61,27 @@ async def test_complete_upload_sends_empty_json(aclient: AsyncClient, api: respx
     await aclient.documents.complete_upload("upl_1")
     assert route.calls.last.request.content == b"{}"
     assert route.calls.last.request.headers["content-type"] == "application/json"
+
+
+async def test_async_receipt_pdf_and_auto_send(aclient: AsyncClient, api: respx.MockRouter) -> None:
+    api.get("/v1/faxes/fax_1/receipt.pdf").respond(
+        200, content=b"%PDF", headers={"content-type": "application/pdf"}
+    )
+    assert await aclient.faxes.get_receipt_pdf("fax_1") == b"%PDF"
+    setting = {
+        "environment": "test",
+        "enabled": True,
+        "max_amount_micro": 5000000,
+        "daily_max_jobs": 20,
+        "policy_id": "pol_1",
+        "version": 1,
+    }
+    route = api.put("/v1/organizations/current/auto-send").respond(200, json=setting)
+    out = await aclient.policies.set_auto_send(enabled=True)
+    assert out.policy_id == "pol_1"
+    assert route.calls.last.request.content == b'{"enabled":true}'
+
+
+async def test_async_oauth_grants_iter(aclient: AsyncClient, api: respx.MockRouter) -> None:
+    api.get("/v1/oauth/grants").respond(200, json={"items": [], "next_cursor": None})
+    assert [g.id async for g in aclient.oauth.iter_grants()] == []
