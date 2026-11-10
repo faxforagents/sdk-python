@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+The saved spec follows the public document at API 1.12.0, 134 operations. Models are regenerated from it.
+New calls: `faxes.get_receipt_pdf`, `numbers.list_orders`, `policies.get_auto_send`, `policies.set_auto_send` and `organizations.download_export_archive`.
+New resource `oauth` for connected apps: `list_grants`, `iter_grants` and `revoke_grant`.
+New models `AutoSendSetting`, `AutoSendUpdate` and `NumberOrderList`. `ApiKey` carries `connected_app`, `Policy` carries `managed` and `EffectivePolicies` carries `requires_human_approval`.
+Existing model names, fields and optionality are kept.
+
 ## 0.2.5 (2026-11-09)
 
 `quotes.create` takes `sender_name` (the station name in the fax header) and `delete_after_send`. `Quote` and `FaxJob` carry both. The CLI has `--sender-name` and `--delete-after-send`. Needs API 1.12.0.

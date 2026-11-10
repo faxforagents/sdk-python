@@ -51,3 +51,33 @@ def test_events_iter(client: Client, api: respx.MockRouter) -> None:
     ]
     assert [e.type for e in client.events.iter(type="fax.delivered")] == ["fax.delivered"]
     assert "type=fax.delivered" in str(route.calls.last.request.url)
+
+
+def grant(**over: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "id": "grant_a",
+        "org_id": "org_1",
+        "organization": "Example",
+        "user_id": "user_1",
+        "client_id": "client_1",
+        "client_host": "app.example",
+        "client_name": None,
+        "environment": "test",
+        "scopes": ["fax:read"],
+        "created_at": "2026-11-01T00:00:00Z",
+        "last_used_at": None,
+        "revoked_at": None,
+    }
+    base.update(over)
+    return base
+
+
+def test_oauth_grants_iter(client: Client, api: respx.MockRouter) -> None:
+    route = api.get("/v1/oauth/grants")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [grant()], "next_cursor": "c2"}),
+        httpx.Response(200, json={"items": [grant(id="grant_b")], "next_cursor": None}),
+    ]
+    assert [g.id for g in client.oauth.iter_grants(limit=1)] == ["grant_a", "grant_b"]
+    assert "cursor=c2" in str(route.calls.last.request.url)
+    assert "limit=1" in str(route.calls.last.request.url)

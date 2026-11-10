@@ -129,7 +129,8 @@ class Call:
         self.json = dump(json) if json is not None else None
         self.content = content
         self.headers = dict(headers or {})
-        if self.method in MUTATING and "Idempotency-Key" not in self.headers:
+        # A PUT carries a key only when the caller passes one: the signed upload PUT takes none.
+        if (self.method in MUTATING or idempotency_key) and "Idempotency-Key" not in self.headers:
             self.headers["Idempotency-Key"] = idempotency_key or str(uuid.uuid4())
         if content is not None and "Content-Type" not in self.headers:
             self.headers["Content-Type"] = "application/octet-stream"
