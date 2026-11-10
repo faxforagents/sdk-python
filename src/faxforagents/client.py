@@ -69,15 +69,22 @@ class Identity(_Resource):
         environment: str = "test",
         scopes: list[str] | None = None,
         expires_in_days: int | None = None,
+        connected_app: bool | None = None,
         idempotency_key: str | None = None,
     ) -> m.ApiKeyWithSecret:
-        """Create a key. The secret is in the answer once. Scope: key:admin."""
-        body = {
+        """Create a key. The secret is in the answer once. Scope: key:admin.
+
+        ``connected_app=True`` marks the key as one a connected app uses over stdio, such as the Gemini CLI
+        extension: the organization's auto-send setting binds it like an OAuth connection. The answer and
+        ``list_api_keys`` carry the flag. Needs API 1.12.0; older servers refuse the field."""
+        body: dict[str, Any] = {
             "label": label,
             "environment": environment,
             "scopes": scopes,
             "expires_in_days": expires_in_days,
         }
+        if connected_app is not None:
+            body["connected_app"] = connected_app
         return self._h.request(
             "POST", "/v1/api-keys", model=m.ApiKeyWithSecret, json=body, idempotency_key=idempotency_key
         )

@@ -20,7 +20,7 @@ from faxforagents import (
     ScopeError,
     ServerError,
 )
-from tests.conftest import BASE, KEY, document, error, fax_job, quote
+from tests.conftest import BASE, KEY, api_key_with_secret, document, error, fax_job, quote
 
 
 def test_bearer_header_and_user_agent(client: Client, api: respx.MockRouter) -> None:
@@ -343,3 +343,32 @@ def test_effective_policies_can_ask_about_another_principal(client: Client, api:
     with pytest.raises(Exception):  # noqa: B017, PT011
         Client(api_key=KEY, base_url=BASE, max_retries=0).policies.effective()
     assert str(route.calls.last.request.url) == f"{BASE}/v1/policies/effective"
+
+
+def test_create_api_key_sends_connected_app_only_when_given(client: Client, api: respx.MockRouter) -> None:
+    route = api.post("/v1/api-keys")
+    route.side_effect = [
+        httpx.Response(201, json=api_key_with_secret(connected_app=True)),
+        httpx.Response(201, json=api_key_with_secret(connected_app=False)),
+        httpx.Response(201, json=api_key_with_secret()),
+    ]
+    made = client.identity.create_api_key("gemini", scopes=["fax:send"], connected_app=True)
+    assert made.connected_app is True
+    assert json.loads(route.calls.last.request.content) == {
+        "label": "gemini",
+        "environment": "test",
+        "scopes": ["fax:send"],
+        "connected_app": True,
+    }
+    assert client.identity.create_api_key("plain", connected_app=False).connected_app is False
+    assert json.loads(route.calls.last.request.content)["connected_app"] is False
+    # Left out, the field is not sent and an answer without it reads as a plain key.
+    assert client.identity.create_api_key("older").connected_app is False
+    assert json.loads(route.calls.last.request.content) == {"label": "older", "environment": "test"}
+
+
+def test_list_api_keys_reads_connected_app(client: Client, api: respx.MockRouter) -> None:
+    flagged = {k: v for k, v in api_key_with_secret(connected_app=True).items() if k != "secret"}
+    plain = {k: v for k, v in api_key_with_secret(id="key_plain").items() if k != "secret"}
+    api.get("/v1/api-keys").respond(200, json={"items": [flagged, plain]})
+    assert [k.connected_app for k in client.identity.list_api_keys().items] == [True, False]

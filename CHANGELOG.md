@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+`identity.create_api_key` takes `connected_app` on both clients. A key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.
+The field is sent only when given, so existing calls send the same body. Needs API 1.12.0.
+
 ## 0.3.1 (2026-11-10)
 
 `faxes.list` takes `idempotency_key`, a filter that finds the send made with that key.
