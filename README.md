@@ -300,6 +300,7 @@ sh scripts/truthcheck.sh
 ```
 
 `spec/openapi.yaml` follows the public document at API version 1.18.0 and keeps the schemas of the earlier live documents.
+The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.
