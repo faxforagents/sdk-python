@@ -14,6 +14,7 @@ from faxforagents import (
     AuthenticationError,
     Client,
     ConflictError,
+    InvalidRequestError,
     NotFoundError,
     PaymentRequiredError,
     RateLimitedError,
@@ -154,6 +155,58 @@ def test_error_envelope_maps_to_typed_exceptions(
     assert err.code == code and err.status == status  # type: ignore[attr-defined]
     assert err.details == {"scope": "fax:read"}  # type: ignore[attr-defined]
     assert "req_1" in str(err)
+
+
+def test_validation_and_upload_queue_are_the_envelope(api: respx.MockRouter) -> None:
+    """API 1.18.0 declares every error as the envelope. A field that fails validation is no other shape."""
+    api.post("/v1/fax-quotes").respond(
+        422,
+        json={
+            "error": {
+                "code": "invalid_request",
+                "message": "to is not a number",
+                "retryable": False,
+                "correlation_id": None,
+                "details": {"field": "to"},
+            }
+        },
+    )
+    api.post("/v1/one-time-sends").respond(
+        429,
+        json={
+            "error": {
+                "code": "rate_limited",
+                "message": "uploads are queued",
+                "retryable": True,
+                "correlation_id": "req_2",
+                "details": {"cap": "upload_queue"},
+            }
+        },
+        headers={"Retry-After": "5"},
+    )
+    with Client(KEY, base_url=BASE, max_retries=0) as c:
+        with pytest.raises(InvalidRequestError) as invalid:
+            c.quotes.create(document_id="doc_1", to="x")
+        assert invalid.value.status == 422 and invalid.value.code == "invalid_request"
+        assert invalid.value.retryable is False and invalid.value.correlation_id is None
+        assert invalid.value.details == {"field": "to"}
+        with pytest.raises(RateLimitedError) as queued:
+            c.one_time_sends.create(
+                to="+12025550100", sender_name="Ada", accept_aup=True, email="a@example.com", text="x"
+            )
+        assert queued.value.retryable is True and queued.value.retry_after == 5.0
+        assert queued.value.correlation_id == "req_2" and queued.value.details == {"cap": "upload_queue"}
+
+
+def test_error_envelope_model_reads_the_body() -> None:
+    from faxforagents.models import ErrorBody, ErrorEnvelope
+
+    env = ErrorEnvelope.model_validate({"error": {"code": "not_found", "message": "no", "retryable": False}})
+    assert (
+        isinstance(env.error, ErrorBody)
+        and env.error.code == "not_found"
+        and env.error.correlation_id is None
+    )
 
 
 def test_non_json_error_body(client: Client, api: respx.MockRouter) -> None:

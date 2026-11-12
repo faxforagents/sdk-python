@@ -116,7 +116,7 @@ class Documents(_Resource):
         content_type: str = "application/pdf",
         idempotency_key: str | None = None,
     ) -> m.UploadSession:
-        """Open an upload session with a signed PUT URL (25 MB, one hour). ``content_type`` is
+        """Open an upload session with a signed PUT URL (25 MiB, one hour). ``content_type`` is
         application/pdf, image/png, image/jpeg or image/tiff. Scope: document:write."""
         body = m.UploadCreate(filename=filename, size_bytes=size_bytes, content_type=content_type)
         return await self._h.request(

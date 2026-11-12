@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 (2026-11-12)
+
+Follows API 1.18.0. The saved spec has 145 operations and the models are regenerated from it.
+No client method, argument or return type changed. An API key is sent as before.
+
+Breaking: the models `HTTPValidationError` and `ValidationError` are removed from `faxforagents.models`.
+The server never sent that shape. A 422 is the error envelope and the client raises `InvalidRequestError`, as it did in 0.4.1.
+Code that imported either model has to delete the import. Nothing replaces them. pydantic's own `ValidationError` is not affected.
+
+Breaking: `ErrorEnvelope.error` is the new model `ErrorBody`, where 0.4.1 declared a plain dict. Read `env.error.code`, not `env.error["code"]`.
+`ErrorBody` has `code`, `message`, `retryable`, `correlation_id` and `details`. `correlation_id` may be `None`.
+Raised errors are the same classes with the same attributes.
+
+`one_time_sends.create` can raise `RateLimitedError` with `details["cap"]` equal to `upload_queue`. Too many files are being read at once, so wait `retry_after` seconds.
+Other model names, fields and optionality are kept.
+
 ## 0.4.1 (2026-11-12)
 
 Follows API 1.17.0. The saved spec has 145 operations and the models are regenerated from it.
