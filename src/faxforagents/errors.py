@@ -8,7 +8,7 @@ Every API refusal is one envelope: ``{"error": {"code", "message", "retryable", 
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict, cast
 
 
 class FaxForAgentsError(Exception):
@@ -69,17 +69,40 @@ class ConflictError(APIError):
     """409: the resource is in a state that refuses this change (``quote_consumed``, ``not_cancelable``)."""
 
 
+class OneTimeOffer(TypedDict, total=False):
+    """``details["one_time_offer"]`` of 402 insufficient_balance: the card path for this exact send.
+
+    A pointer, never a promise: ``one_time_sends.create_from_quote`` runs every check again."""
+
+    amount_micro: int
+    currency: str
+    document_pages: int
+    included_pages: int
+    extra_page_micro: int
+    max_document_pages: int
+    approval_id: str | None
+
+
 class PaymentRequiredError(APIError):
     """402 insufficient_balance: the wallet does not cover the fax. A person tops up."""
 
     @property
-    def one_time_offer(self) -> dict[str, Any] | None:
+    def top_up_url(self) -> str | None:
+        """``details["top_up_url"]``: the dashboard page where a person adds funds, else ``None``.
+
+        A key cannot top up. Servers send it since API 1.17.0."""
+        url = self.details.get("top_up_url") if isinstance(self.details, dict) else None
+        return url if isinstance(url, str) else None
+
+    @property
+    def one_time_offer(self) -> OneTimeOffer | None:
         """``details["one_time_offer"]`` when the server sent one, else ``None``.
 
-        A server that offers the card path for this exact send names its price here. Pass the quote to
-        ``one_time_sends.create_from_quote``. Servers at API 1.16.1 do not send it."""
+        Present when this exact send can be paid by card: it names the one-time price in
+        ``amount_micro``, the page counts and the ``approval_id`` that authorizes the order. Pass the
+        quote to ``one_time_sends.create_from_quote``. Servers send it since API 1.17.0."""
         offer = self.details.get("one_time_offer") if isinstance(self.details, dict) else None
-        return offer if isinstance(offer, dict) else None
+        return cast(OneTimeOffer, offer) if isinstance(offer, dict) else None
 
 
 class RateLimitedError(APIError):

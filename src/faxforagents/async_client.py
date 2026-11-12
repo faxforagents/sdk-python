@@ -19,6 +19,7 @@ import asyncio
 import hashlib
 import time
 import uuid
+import warnings
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -1383,7 +1384,7 @@ class OneTimeSends(_Resource):
         *,
         quote_id: str,
         sender_name: str,
-        accept_aup: bool,
+        accept_aup: bool | None = None,
         email: str | None = None,
         approval_id: str | None = None,
         delete_after_send: bool | None = None,
@@ -1394,16 +1395,20 @@ class OneTimeSends(_Resource):
 
         The price is the one-time price of the card, not the quote's. Paying by card does not replace
         approval: pass ``approval_id`` unless a delegated policy allows the send, or the answer is 403
-        ``approval_required``."""
-        body = m.OneTimeFromQuote(
-            quote_id=quote_id,
-            sender_name=sender_name,
-            accept_aup=accept_aup,
-            email=email,
-            approval_id=approval_id,
-            delete_after_send=delete_after_send,
-            source_ref=source_ref,
-        )
+        ``approval_required``.
+
+        A key does not accept the terms for the payer, so ``accept_aup`` is optional and is sent only
+        when given. The order answers ``aup_accepted`` false and a ``status_url``: hand that page to the
+        person who pays. They accept the acceptable use policy and the terms there."""
+        body: dict[str, Any] = {
+            "quote_id": quote_id,
+            "sender_name": sender_name,
+            "accept_aup": accept_aup,
+            "email": email,
+            "approval_id": approval_id,
+            "delete_after_send": delete_after_send,
+            "source_ref": source_ref,
+        }
         return await self._h.request(
             "POST",
             "/v1/one-time-sends/from-quote",
@@ -1455,23 +1460,52 @@ class OneTimeSends(_Resource):
         return order
 
     async def checkout(
-        self, order_id: str, *, order_token: str | None = None, idempotency_key: str | None = None
+        self,
+        order_id: str,
+        *,
+        accept_aup: bool | None = None,
+        order_token: str | None = None,
+        idempotency_key: str | None = None,
     ) -> m.OneTimeCheckout:
         """Open the hosted card payment and return its ``checkout_url``. Scope with a key: fax:send.
 
         The card is authorized on that page and charged only when the carrier confirms delivery. A
-        second call answers the same page while it can still be paid."""
+        second call answers the same page while it can still be paid.
+
+        An order whose ``aup_accepted`` is false needs ``accept_aup=True`` once: the person who pays
+        accepts the acceptable use policy and the terms. The server takes it with ``order_token`` or a
+        session, never from a key."""
         return await self._h.request(
             "POST",
             f"/v1/one-time-sends/{order_id}/checkout",
             model=m.OneTimeCheckout,
-            json={},
+            json={"accept_aup": accept_aup},
             headers=token_header(order_token),
             idempotency_key=idempotency_key,
         )
 
+    async def read_by_token(self, token: str) -> m.OneTimeConfirmSummary:
+        """What a mailed confirmation link is for, without using it. No key needed.
+
+        The token travels in the body, so it stays out of the address and of access logs. Nothing is
+        consumed and nothing changes. Needs API 1.17.0."""
+        return await self._h.request(
+            "POST",
+            "/v1/one-time-sends/by-token",
+            model=m.OneTimeConfirmSummary,
+            json=m.OneTimeConfirm(token=token),
+        )
+
     async def get_by_token(self, token: str) -> m.OneTimeConfirmSummary:
-        """What a mailed confirmation link is for, without using it. No key needed."""
+        """Deprecated: use ``read_by_token``. The same read with the token in the path.
+
+        A token in a path reaches access logs. The API keeps this route for older callers and marks it
+        deprecated since 1.17.0."""
+        warnings.warn(
+            "one_time_sends.get_by_token is deprecated: use read_by_token, which posts the token",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return await self._h.request(
             "GET", f"/v1/one-time-sends/by-token/{token}", model=m.OneTimeConfirmSummary
         )

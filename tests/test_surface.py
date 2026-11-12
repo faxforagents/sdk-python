@@ -204,6 +204,7 @@ def test_every_operation_has_a_method() -> None:
         "list_one_time_orders": "one_time_sends.list",
         "get_one_time_order": "one_time_sends.get",
         "get_one_time_order_by_token": "one_time_sends.get_by_token",
+        "read_one_time_order_by_token": "one_time_sends.read_by_token",
         "create_one_time_checkout": "one_time_sends.checkout",
         "confirm_one_time_order": "one_time_sends.confirm",
         "resend_one_time_confirmation": "one_time_sends.resend_confirmation",
