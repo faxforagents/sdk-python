@@ -152,6 +152,10 @@ except APIError as exc:
 `ServerError` (5xx) are all `APIError`. `APIConnectionError` and `APITimeoutError` mean the API was
 not reached.
 
+Every refusal is the same envelope, a 422 for a field that fails validation included. A 413
+`payload_too_large` is a plain `APIError`: the body is over the limit of its route. The published
+limits are in one table at <https://faxforagents.com/docs/limits/>.
+
 ## Approvals
 
 A live send needs either a human approval bound to the quote or a delegated policy that allows it.
@@ -295,7 +299,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.17.0 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.18.0 and keeps the schemas of the earlier live documents.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.
