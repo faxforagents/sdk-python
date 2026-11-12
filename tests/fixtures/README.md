@@ -14,3 +14,11 @@ Documents, numbers, balance and policy records had no additional fields beyond t
 Policy evaluations also return usage when a policy applies.
 Fax jobs, quotes, extraction pages and inbound summaries needed the route-documented additions.
 Capabilities gains `one_time` from the updated snapshot.
+
+## One-time sends (`one-time.json`)
+
+Server source revision: `5bee3b046dbcb5bc0fbf98ae59c1a40a1c8c1434`, API 1.16.1.
+`config` and `not_found` were recorded from `https://api.faxforagents.com` on 2026-11-12. Both routes answer without a key.
+The other cases follow the serializers `order_json` and `job_block` in `onetime/service.py` and the answers in `api/routes/onetime.py`.
+They are synthetic examples, not captured traffic: no order was created and no card was charged to make them.
+Ids, addresses, the token and the checkout address are test values.

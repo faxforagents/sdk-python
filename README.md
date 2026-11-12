@@ -119,6 +119,7 @@ each call needs.
 | `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `download_export_archive` |
 | `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `revoke_invitation` |
 | `ffa.oauth` | `list_grants`, `iter_grants`, `revoke_grant` |
+| `ffa.one_time_sends` | `config`, `create`, `create_from_quote`, `list`, `iter`, `get`, `wait`, `checkout`, `get_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
 
 `ffa.request("GET", "/v1/anything")` reaches an operation the resources do not cover yet.
 
@@ -173,6 +174,58 @@ key = ffa.identity.create_api_key("gemini", scopes=["fax:send"], connected_app=T
 key.connected_app                              # True, also on ffa.identity.list_api_keys()
 ```
 
+## One fax by card
+
+A person with one fax to send needs no wallet and no key. `one_time_sends` makes an order, opens a hosted
+card payment and follows the order until the fax ends. The person pays on the hosted page and clicks the
+link mailed to them. The client never sees a card.
+
+```python
+from faxforagents import Client
+
+with Client(keyless=True) as ffa:                 # no API key: only one_time_sends answers
+    config = ffa.one_time_sends.config()          # open here? the card and the limits
+    order = ffa.one_time_sends.create(
+        to="+12025550123",
+        sender_name="Dana Example",
+        email="dana@example.com",                 # the confirmation link and the receipt go here
+        accept_aup=True,                          # the policy and terms that config names
+        file="form.pdf",                          # or text="...", text_format="markdown"
+    )
+    token = order.status_token                    # answered once: keep it
+    page = ffa.one_time_sends.checkout(order.id, order_token=token)
+    print(page.checkout_url)                      # the person pays here, then clicks the mailed link
+    order = ffa.one_time_sends.wait(order.id, order_token=token, timeout=1800)
+    print(order.status, order.fax["state"] if order.fax else None)
+    pdf = ffa.one_time_sends.get_receipt_pdf(order.id, order_token=token)
+```
+
+`order.next` names the step that is waiting: `checkout`, `confirm`, `wait` or `done`. `wait` polls until
+`done`, or until the step you pass as `until`. The card is authorized at checkout and charged only when
+the carrier confirms delivery.
+
+The status token goes in the `X-FFA-Order-Token` header. It reads the order, opens its checkout, mails
+the confirmation again and downloads the receipt. A client with a live key of the order's organization
+needs no token. A test key is refused: an order is always live.
+
+With a live key, `create_from_quote` turns a quote the wallet does not cover into an order.
+
+```python
+from faxforagents import PaymentRequiredError
+
+try:
+    fax = ffa.faxes.create(quote_id=quote.id)
+except PaymentRequiredError:
+    order = ffa.one_time_sends.create_from_quote(
+        quote_id=quote.id, sender_name="Dana Example", accept_aup=True, approval_id=approval_id
+    )
+```
+
+Paying by card does not replace approval. The send must have an approval or a delegated policy, as a
+wallet send does. `confirm(order_id, token=...)` and `get_by_token(token)` serve a page of your own
+that receives the mailed link. The amounts are on the [pricing page](https://faxforagents.com/pricing/)
+and in `config().routes`, in micro-units.
+
 ## Webhooks
 
 ```python
@@ -208,9 +261,10 @@ Every command takes `--json` for the raw answer.
 
 ## Prices
 
-Price card launch-v1 is effective from 2026-10-28. $0.039 per page sent, $0.019 per page received.
+Price card launch-v2 is effective from 2026-10-31. $0.039 per page sent, $0.019 per page received.
 $2 per number per month, $19 per month for the Agent workspace. Sandbox pages cost 0.
-`ffa.platform.capabilities()` returns the card in force.
+`ffa.platform.capabilities()` returns the card in force. One fax by card has its own price:
+`ffa.one_time_sends.config()` returns it.
 
 ## Working on this repository
 
@@ -223,7 +277,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.13.2 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.16.1 and keeps the schemas of the earlier live documents.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.

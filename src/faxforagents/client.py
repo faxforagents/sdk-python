@@ -27,7 +27,7 @@ from typing import Any
 import httpx
 
 from faxforagents import models as m
-from faxforagents._http import Settings, SyncHttp, paginate
+from faxforagents._http import ORDER_TOKEN_HEADER, Settings, SyncHttp, paginate
 from faxforagents.errors import ConflictError
 
 TERMINAL_STATES = frozenset({"delivered", "partial", "failed", "unknown"})
@@ -46,6 +46,40 @@ CONTENT_TYPES = {
 def guess_content_type(filename: str) -> str:
     """The upload content type of a filename: a PDF unless the suffix says PNG, JPEG or TIFF."""
     return CONTENT_TYPES.get(Path(filename).suffix.lower(), "application/pdf")
+
+
+#: Content types a one-time order takes as a file, by suffix. Anything else is sent as a PDF.
+ONE_TIME_CONTENT_TYPES = {**CONTENT_TYPES, ".txt": "text/plain", ".md": "text/markdown"}
+
+
+def token_header(order_token: str | None) -> dict[str, str] | None:
+    """The ``X-FFA-Order-Token`` header of a one-time order, or nothing when no token is passed."""
+    return {ORDER_TOKEN_HEADER: order_token} if order_token else None
+
+
+def form_fields(fields: dict[str, Any]) -> dict[str, str]:
+    """Multipart text fields: no empty values, booleans as ``true`` or ``false``."""
+    out: dict[str, str] = {}
+    for name, value in fields.items():
+        if value is None:
+            continue
+        out[name] = ("true" if value else "false") if isinstance(value, bool) else str(value)
+    return out
+
+
+def one_time_file(
+    file: bytes | str | Path, filename: str | None, content_type: str | None
+) -> tuple[str, bytes, str]:
+    """``(filename, bytes, content_type)`` of the document of a one-time order, from bytes or a path."""
+    if isinstance(file, (str, Path)):
+        path = Path(file)
+        data = path.read_bytes()
+        name = filename or path.name
+    else:
+        data = bytes(file)
+        name = filename or "document.pdf"
+    ctype = content_type or ONE_TIME_CONTENT_TYPES.get(Path(name).suffix.lower(), "application/pdf")
+    return name, data, ctype
 
 
 class _Resource:
@@ -1296,6 +1330,203 @@ class Oauth(_Resource):
         self._h.request("DELETE", f"/v1/oauth/grants/{grant_id}", idempotency_key=idempotency_key)
 
 
+class OneTimeSends(_Resource):
+    """One fax paid by card, with no wallet (the ``one-time-sends`` operations).
+
+    A person pays on the hosted page of ``checkout`` and clicks the link mailed to them. Nothing here
+    charges a card. The create answers ``status_token`` once. Pass it as ``order_token`` to read the order,
+    open its checkout and mail the confirmation again from a client that has no key. A key of the order's
+    organization needs no token."""
+
+    def config(self) -> m.OneTimeConfig:
+        """Whether one-time sends are open, with the card and the limits. No key needed."""
+        return self._h.request("GET", "/v1/one-time-sends/config", model=m.OneTimeConfig)
+
+    def create(
+        self,
+        *,
+        to: str,
+        sender_name: str,
+        accept_aup: bool,
+        email: str | None = None,
+        file: bytes | str | Path | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
+        text: str | None = None,
+        text_format: str | None = None,
+        to_name: str | None = None,
+        subject: str | None = None,
+        message: str | None = None,
+        delete_after_send: bool | None = None,
+        source_ref: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> m.OneTimeOrderCreated:
+        """Create an order from exactly one of ``file`` or ``text``. Nothing is charged or sent.
+
+        ``file`` is the bytes or the path of a PDF, PNG, JPEG or TIFF and goes as multipart. ``text`` is
+        plain text, or Markdown with ``text_format="markdown"``, and goes as JSON. ``accept_aup=True``
+        accepts the acceptable use policy and the terms that ``config`` names. ``email`` is required
+        without a key. A test key is refused: an order is always live. Scope with a key: fax:send."""
+        if (file is None) == (text is None):
+            raise ValueError("pass exactly one of file or text")
+        fields: dict[str, Any] = {
+            "to": to,
+            "sender_name": sender_name,
+            "accept_aup": accept_aup,
+            "email": email,
+            "to_name": to_name,
+            "subject": subject,
+            "message": message,
+            "delete_after_send": delete_after_send,
+            "source_ref": source_ref,
+        }
+        if file is None:
+            body = {**fields, "text": text, "text_format": text_format}
+            return self._h.request(
+                "POST",
+                "/v1/one-time-sends",
+                model=m.OneTimeOrderCreated,
+                json=body,
+                idempotency_key=idempotency_key,
+            )
+        name, data, ctype = one_time_file(file, filename, content_type)
+        return self._h.request(
+            "POST",
+            "/v1/one-time-sends",
+            model=m.OneTimeOrderCreated,
+            data=form_fields(fields),
+            files={"file": (name, data, ctype)},
+            idempotency_key=idempotency_key,
+        )
+
+    def create_from_quote(
+        self,
+        *,
+        quote_id: str,
+        sender_name: str,
+        accept_aup: bool,
+        email: str | None = None,
+        approval_id: str | None = None,
+        delete_after_send: bool | None = None,
+        source_ref: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> m.OneTimeOrderCreated:
+        """Turn a live quote the wallet does not cover into an order. Scope: fax:send, a live key.
+
+        The price is the one-time price of the card, not the quote's. Paying by card does not replace
+        approval: pass ``approval_id`` unless a delegated policy allows the send, or the answer is 403
+        ``approval_required``."""
+        body = m.OneTimeFromQuote(
+            quote_id=quote_id,
+            sender_name=sender_name,
+            accept_aup=accept_aup,
+            email=email,
+            approval_id=approval_id,
+            delete_after_send=delete_after_send,
+            source_ref=source_ref,
+        )
+        return self._h.request(
+            "POST",
+            "/v1/one-time-sends/from-quote",
+            model=m.OneTimeOrderCreated,
+            json=body,
+            idempotency_key=idempotency_key,
+        )
+
+    def list(
+        self, *, status: str | None = None, cursor: str | None = None, limit: int | None = None
+    ) -> m.OneTimeOrderPage:
+        """The organization's orders, newest first. A test key reads an empty list. Scope: fax:read."""
+        params = {"status": status, "cursor": cursor, "limit": limit}
+        return self._h.request("GET", "/v1/one-time-sends", model=m.OneTimeOrderPage, params=params)
+
+    def iter(self, *, status: str | None = None, limit: int | None = None) -> Iterator[m.OneTimeOrder]:
+        """Every order, following next_cursor."""
+        return paginate(lambda p: self.list(**p), {"status": status, "limit": limit})
+
+    def get(self, order_id: str, *, order_token: str | None = None) -> m.OneTimeOrder:
+        """The order: its status, the step that is waiting in ``next``, and the fax once released.
+
+        Read it with a key of the order's organization (scope fax:read) or with ``order_token``."""
+        return self._h.request(
+            "GET", f"/v1/one-time-sends/{order_id}", model=m.OneTimeOrder, headers=token_header(order_token)
+        )
+
+    def wait(
+        self,
+        order_id: str,
+        *,
+        until: str | Sequence[str] = "done",
+        order_token: str | None = None,
+        timeout: float = 300.0,
+        interval: float = 3.0,
+    ) -> m.OneTimeOrder:
+        """Poll until ``next`` is ``until`` (``done`` by default), or the order is done.
+
+        ``until`` is one of checkout, confirm, wait, done, or several. Returns the last order read, which
+        may still be short of ``until`` when ``timeout`` ran out. A person pays and confirms, so allow
+        minutes."""
+        wanted = {until} if isinstance(until, str) else set(until)
+        wanted.add("done")
+        deadline = time.monotonic() + timeout
+        order = self.get(order_id, order_token=order_token)
+        while order.next not in wanted and time.monotonic() < deadline:
+            time.sleep(interval)
+            order = self.get(order_id, order_token=order_token)
+        return order
+
+    def checkout(
+        self, order_id: str, *, order_token: str | None = None, idempotency_key: str | None = None
+    ) -> m.OneTimeCheckout:
+        """Open the hosted card payment and return its ``checkout_url``. Scope with a key: fax:send.
+
+        The card is authorized on that page and charged only when the carrier confirms delivery. A
+        second call answers the same page while it can still be paid."""
+        return self._h.request(
+            "POST",
+            f"/v1/one-time-sends/{order_id}/checkout",
+            model=m.OneTimeCheckout,
+            json={},
+            headers=token_header(order_token),
+            idempotency_key=idempotency_key,
+        )
+
+    def get_by_token(self, token: str) -> m.OneTimeConfirmSummary:
+        """What a mailed confirmation link is for, without using it. No key needed."""
+        return self._h.request("GET", f"/v1/one-time-sends/by-token/{token}", model=m.OneTimeConfirmSummary)
+
+    def confirm(self, order_id: str, *, token: str) -> m.OneTimeConfirmed:
+        """Confirm the order with the token of the mailed link. The fax is released. No key needed.
+
+        The link works once. A repeat answers 409 ``link_used`` and sends nothing."""
+        return self._h.request(
+            "POST",
+            f"/v1/one-time-sends/{order_id}/confirm",
+            model=m.OneTimeConfirmed,
+            json=m.OneTimeConfirm(token=token),
+        )
+
+    def resend_confirmation(
+        self, order_id: str, *, order_token: str | None = None, idempotency_key: str | None = None
+    ) -> m.OneTimeOrder:
+        """Mail the confirmation link again. At most three times per order and once in ten minutes."""
+        return self._h.request(
+            "POST",
+            f"/v1/one-time-sends/{order_id}/resend-confirmation",
+            model=m.OneTimeOrder,
+            json={},
+            headers=token_header(order_token),
+            idempotency_key=idempotency_key,
+        )
+
+    def get_receipt_pdf(self, order_id: str, *, order_token: str | None = None) -> bytes:
+        """The receipt of the order's fax as a one-page PDF. 409 while the fax has not ended."""
+        data = self._h.request(
+            "GET", f"/v1/one-time-sends/{order_id}/receipt.pdf", headers=token_header(order_token)
+        )
+        return bytes(data)
+
+
 class Client:
     """The synchronous Fax for Agents client. Use it as a context manager or call ``close``."""
 
@@ -1309,8 +1540,13 @@ class Client:
         backoff_base: float = 0.5,
         max_retry_after: float = 30.0,
         transport: httpx.BaseTransport | None = None,
+        keyless: bool = False,
     ) -> None:
-        self.settings = Settings(api_key, base_url, timeout, max_retries, backoff_base, max_retry_after)
+        """``keyless=True`` builds a client with no API key. It can call ``one_time_sends`` and nothing
+        else: every other operation answers 401."""
+        self.settings = Settings(
+            api_key, base_url, timeout, max_retries, backoff_base, max_retry_after, keyless=keyless
+        )
         self._h = SyncHttp(self.settings, transport)
         self.identity = Identity(self._h)
         self.documents = Documents(self._h)
@@ -1330,6 +1566,7 @@ class Client:
         self.organizations = Organizations(self._h)
         self.members = Members(self._h)
         self.oauth = Oauth(self._h)
+        self.one_time_sends = OneTimeSends(self._h)
 
     def me(self) -> m.Me:
         """Shortcut for ``identity.me()``."""

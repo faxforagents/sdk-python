@@ -26,6 +26,8 @@ from faxforagents import __version__
 from faxforagents.errors import APIConnectionError, APIError, APITimeoutError, error_for
 
 DEFAULT_BASE_URL = "https://api.faxforagents.com"
+#: The header that carries the status token of a one-time order, for a caller without a key.
+ORDER_TOKEN_HEADER = "X-FFA-Order-Token"
 ENV_KEY = "FAXFORAGENTS_API_KEY"
 ENV_KEY_FALLBACK = "FFA_API_KEY"
 ENV_URL = "FAXFORAGENTS_API_URL"
@@ -87,8 +89,10 @@ class Settings:
         max_retries: int,
         backoff_base: float,
         max_retry_after: float,
+        keyless: bool = False,
     ) -> None:
-        self.api_key = resolve_key(api_key)
+        # A keyless client sends no Authorization header. Only the one-time send answers it.
+        self.api_key: str | None = None if keyless else resolve_key(api_key)
         self.base_url = resolve_url(base_url)
         self.timeout = timeout
         self.max_retries = max(0, max_retries)
@@ -96,11 +100,13 @@ class Settings:
         self.max_retry_after = max_retry_after
 
     def headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
+        headers = {
             "Accept": "application/json",
             "User-Agent": f"faxforagents-python/{__version__}",
         }
+        if self.api_key is not None:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def wait_for(self, attempt: int, retry_after: str | None) -> float:
         explicit = retry_after_seconds(retry_after, self.max_retry_after)
@@ -120,6 +126,8 @@ class Call:
         params: Mapping[str, Any] | None = None,
         json: Any = None,
         content: bytes | None = None,
+        data: Mapping[str, str] | None = None,
+        files: Mapping[str, tuple[str, bytes, str]] | None = None,
         headers: Mapping[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> None:
@@ -128,7 +136,10 @@ class Call:
         self.params = clean_params(params)
         self.json = dump(json) if json is not None else None
         self.content = content
-        self.headers = dict(headers or {})
+        # A multipart form: text fields in ``data``, ``(filename, bytes, content_type)`` parts in ``files``.
+        self.data = dict(data) if data else None
+        self.files = dict(files) if files else None
+        self.headers = {k: v for k, v in (headers or {}).items() if v is not None}
         # A PUT carries a key only when the caller passes one: the signed upload PUT takes none.
         if (self.method in MUTATING or idempotency_key) and "Idempotency-Key" not in self.headers:
             self.headers["Idempotency-Key"] = idempotency_key or str(uuid.uuid4())
@@ -199,6 +210,8 @@ class SyncHttp:
                     params=call.params,
                     json=call.json,
                     content=call.content,
+                    data=call.data,
+                    files=call.files,
                     headers=call.headers,
                 )
             except httpx.TimeoutException as exc:
@@ -258,6 +271,8 @@ class AsyncHttp:
                     params=call.params,
                     json=call.json,
                     content=call.content,
+                    data=call.data,
+                    files=call.files,
                     headers=call.headers,
                 )
             except httpx.TimeoutException as exc:

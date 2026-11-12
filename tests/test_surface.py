@@ -28,7 +28,12 @@ RESOURCES = [
     "organizations",
     "members",
     "oauth",
+    "one_time_sends",
 ]
+
+
+def class_name(resource: str) -> str:
+    return "".join(part.capitalize() for part in resource.split("_"))
 
 
 def public_methods(cls: type) -> dict[str, inspect.Signature]:
@@ -43,8 +48,8 @@ def public_methods(cls: type) -> dict[str, inspect.Signature]:
 
 def test_resources_match() -> None:
     for name in RESOURCES:
-        sync_cls = getattr(client, name.capitalize())
-        async_cls = getattr(async_client, name.capitalize())
+        sync_cls = getattr(client, class_name(name))
+        async_cls = getattr(async_client, class_name(name))
         s, a = public_methods(sync_cls), public_methods(async_cls)
         assert s.keys() == a.keys(), name
         for method in s:
@@ -193,6 +198,16 @@ def test_every_operation_has_a_method() -> None:
         "revoke_invitation": "members.revoke_invitation",
         "list_oauth_grants": "oauth.list_grants",
         "revoke_oauth_grant": "oauth.revoke_grant",
+        "get_one_time_config": "one_time_sends.config",
+        "create_one_time_order": "one_time_sends.create",
+        "create_one_time_order_from_quote": "one_time_sends.create_from_quote",
+        "list_one_time_orders": "one_time_sends.list",
+        "get_one_time_order": "one_time_sends.get",
+        "get_one_time_order_by_token": "one_time_sends.get_by_token",
+        "create_one_time_checkout": "one_time_sends.checkout",
+        "confirm_one_time_order": "one_time_sends.confirm",
+        "resend_one_time_confirmation": "one_time_sends.resend_confirmation",
+        "get_one_time_receipt_pdf": "one_time_sends.get_receipt_pdf",
     }
     ids = {op["operationId"] for ops in spec["paths"].values() for op in ops.values()}
     assert ids == set(covered), ids ^ set(covered)

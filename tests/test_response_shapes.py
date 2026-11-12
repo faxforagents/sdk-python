@@ -10,7 +10,9 @@ import pytest
 
 from faxforagents import models
 
-CASES = json.loads((Path(__file__).parent / "fixtures/responses.json").read_text())
+FIXTURES = Path(__file__).parent / "fixtures"
+CASES = json.loads((FIXTURES / "responses.json").read_text())
+CASES += [case for case in json.loads((FIXTURES / "one-time.json").read_text()) if case["model"]]
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case["model"])
