@@ -278,7 +278,7 @@ Every command takes `--json` for the raw answer.
 
 ## Prices
 
-Price card launch-v2 is effective from 2026-10-31. $0.039 per page sent, $0.019 per page received.
+Price card launch-v3 is effective from 2026-11-12. $0.039 per page sent, $0.019 per page received.
 $2 per number per month, $19 per month for the Agent workspace. Sandbox pages cost 0.
 `ffa.platform.capabilities()` returns the card in force. One fax by card has its own price:
 `ffa.one_time_sends.config()` returns it.
