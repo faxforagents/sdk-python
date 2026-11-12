@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 (2026-11-12)
+
+New resource `one_time_sends` on both clients: one fax paid by card, with no wallet.
+Its calls are `config`, `create`, `create_from_quote`, `list`, `iter`, `get`, `wait`, `checkout`, `get_by_token`, `confirm`, `resend_confirmation` and `get_receipt_pdf`.
+`create` sends a file as multipart or text as JSON. `wait` polls until the order's `next` is `done`, or the step passed as `until`.
+`get`, `wait`, `checkout`, `resend_confirmation` and `get_receipt_pdf` take `order_token`, sent as `X-FFA-Order-Token`. The header name is exported as `ORDER_TOKEN_HEADER`.
+`Client(keyless=True)` and `AsyncClient(keyless=True)` build a client with no API key. It sends no `Authorization` header and can call `one_time_sends` only.
+
+The saved spec follows the public document at API 1.16.1, 144 operations. Models are regenerated from it.
+New models: `OneTimeOrder`, `OneTimeOrderCreated`, `OneTimeOrderPage`, `OneTimeFromQuote`, `OneTimeCheckout`, `OneTimeConfirm`, `OneTimeConfirmSummary`, `OneTimeConfirmed`, `OneTimeCard`, `OneTimePrice`, `OneTimeJob` and `InsufficientBalance`.
+Changed: `FaxJob.one_time` is a `OneTimeJob` model, where 0.3.2 declared a plain dict. Read `fax.one_time.order_id`, not `fax.one_time["order_id"]`. `Receipt` carries `one_time` too.
+Other model names, fields and optionality are kept.
+
+`PaymentRequiredError.one_time_offer` reads `details["one_time_offer"]` when a server sends it, and is `None` otherwise. API 1.16.1 does not send it.
+The package metadata links to the pricing page and the dashboard. The README names price card launch-v2, effective 2026-10-31.
+
 ## 0.3.2 (2026-11-10)
 
 `identity.create_api_key` takes `connected_app` on both clients. A key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.

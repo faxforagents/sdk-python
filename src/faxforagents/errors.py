@@ -72,6 +72,15 @@ class ConflictError(APIError):
 class PaymentRequiredError(APIError):
     """402 insufficient_balance: the wallet does not cover the fax. A person tops up."""
 
+    @property
+    def one_time_offer(self) -> dict[str, Any] | None:
+        """``details["one_time_offer"]`` when the server sent one, else ``None``.
+
+        A server that offers the card path for this exact send names its price here. Pass the quote to
+        ``one_time_sends.create_from_quote``. Servers at API 1.16.1 do not send it."""
+        offer = self.details.get("one_time_offer") if isinstance(self.details, dict) else None
+        return offer if isinstance(offer, dict) else None
+
 
 class RateLimitedError(APIError):
     """429 rate_limited. ``retry_after`` is the seconds the API asked for."""
