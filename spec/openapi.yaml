@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.16.1.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.17.0.
 # All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.16.1
+  version: 1.17.0
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -1288,7 +1288,8 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
         '402':
           description: The wallet does not cover this fax (insufficient_balance). details names available_micro
-            and needed_micro. Nothing was held.
+            and needed_micro, top_up_url where a person adds funds, and one_time_offer when the send can be paid
+            by card instead. Nothing was held.
           content:
             application/json:
               schema:
@@ -8456,16 +8457,64 @@ paths:
         agent_key_allowed: true
         hint: For a live quote the wallet does not cover. The price is the one-time price of the card, not the quote's.
           A key still needs approval_id or a delegated policy that allows the send.
-  /v1/one-time-sends/by-token/{token}:
-    get:
+  /v1/one-time-sends/by-token:
+    post:
       tags:
       - one-time-sends
       summary: What a confirmation link is for, without using it
       description: |-
-        The confirm page reads this before the click. Nothing is consumed by reading it.
+        The confirm page reads this before the click, with the token in the body. Nothing is consumed by reading it, and nothing is changed: the call is a read that keeps the token out of the address. Idempotency-Key is accepted but ignored.
+
+        No API key is needed.
+      operationId: read_one_time_order_by_token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OneTimeConfirm'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeConfirmSummary'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: The confirmation link is not valid (link_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limit reached (rate_limited). Retry after the seconds in Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      x-llm:
+        scope: none
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+      security: []
+  /v1/one-time-sends/by-token/{token}:
+    get:
+      tags:
+      - one-time-sends
+      summary: What a confirmation link is for, without using it (token in the path)
+      description: |-
+        Kept for pages loaded before 2026-11-12. The token in a path reaches access logs, so new callers post it to /v1/one-time-sends/by-token instead. Nothing is consumed by reading it.
 
         No API key is needed.
       operationId: get_one_time_order_by_token
+      deprecated: true
       parameters:
       - name: token
         in: path
@@ -8650,7 +8699,8 @@ paths:
       summary: Open the card payment of a one-time order
       description: 'Answers the hosted payment page of the order. The card is authorized there, not charged: it
         is charged when the carrier confirms delivery. A second call answers the same page while it can still be
-        paid, and a new one after it expired.'
+        paid, and a new one after it expired. An order whose aup_accepted is false needs {"accept_aup": true} in
+        the body once, from the status token or a session: the person who pays accepts the policy, never a key.'
       operationId: create_one_time_checkout
       parameters:
       - name: one_time_order_id
@@ -8723,6 +8773,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              properties:
+                accept_aup:
+                  default: false
+                  description: 'True: the person who pays accepts the acceptable use policy and the terms. Needed
+                    once, for an order whose aup_accepted is false, and taken only from the status token or a session.'
+                  title: Accept Aup
+                  type: boolean
+              title: OneTimeCheckoutRequest
+              type: object
       x-llm:
         scope: fax:send
         mutating: true
@@ -10984,6 +11049,12 @@ components:
         held_micro:
           type: integer
           title: Held Micro
+        top_up_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Top Up Url
+          description: The dashboard page where a person adds funds to the wallet. A key cannot top up.
       additionalProperties: true
       type: object
       required:
@@ -11242,6 +11313,13 @@ components:
         extraction:
           type: boolean
           title: Extraction
+        extraction_pricing:
+          additionalProperties: true
+          type: object
+          title: Extraction Pricing
+          description: What POST /v1/extractions charges, in micro-units. page_micro is for every page read. escalated_page_micro
+            is added for a page the stronger model reads again. max_pages is the most pages one extraction reads.
+            Sandbox extractions are free.
         limits:
           additionalProperties:
             type: integer
@@ -12969,6 +13047,42 @@ components:
                 needed_micro:
                   type: integer
                   description: What this fax holds.
+                top_up_url:
+                  type: string
+                  description: The dashboard page where a person adds funds to the wallet. A key cannot top up.
+                one_time_offer:
+                  type: object
+                  description: 'The card path for this exact send, present when it qualifies: the one-time product
+                    is open, the key is live, the route is sold one fax at a time and the document is within the
+                    page cap. Pass the quote to POST /v1/one-time-sends/from-quote. A pointer, never a promise:
+                    the create runs every check again.'
+                  required:
+                  - amount_micro
+                  - currency
+                  - document_pages
+                  - included_pages
+                  - extra_page_micro
+                  - max_document_pages
+                  properties:
+                    amount_micro:
+                      type: integer
+                      description: The one-time price of this document to this number.
+                    currency:
+                      type: string
+                    document_pages:
+                      type: integer
+                    included_pages:
+                      type: integer
+                    extra_page_micro:
+                      type: integer
+                    max_document_pages:
+                      type: integer
+                    approval_id:
+                      type:
+                      - string
+                      - 'null'
+                      description: The approval that authorized this send. It authorizes the order of the same quote
+                        too.
     Inventory:
       properties:
         country:
@@ -13853,6 +13967,12 @@ components:
         terms_url:
           type: string
           title: Terms Url
+        queue:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeQueue'
+          - type: 'null'
+          description: The wait a fax ordered now would face for a carrier line. Null when one-time sends are closed
+            here or the carrier has no line limit.
       additionalProperties: true
       type: object
       required:
@@ -13989,6 +14109,9 @@ components:
         accept_aup:
           type: boolean
           title: Accept Aup
+          description: 'A session sends true: the signed-in person accepts the acceptable use policy and the terms.
+            A key''s value is not recorded: the person who pays accepts on the order''s page.'
+          default: false
         email:
           anyOf:
           - type: string
@@ -14023,7 +14146,6 @@ components:
       required:
       - quote_id
       - sender_name
-      - accept_aup
       title: OneTimeFromQuote
     OneTimeJob:
       properties:
@@ -14228,6 +14350,12 @@ components:
           - type: 'null'
           title: Resend Allowed At
           description: When the confirmation mail may be asked for again; null when it may not.
+        queue:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeQueue'
+          - type: 'null'
+          description: The wait for a carrier line while the order has not ended and its fax is not on a line yet.
+            Null for an ended order, a fax that is sending, and a test order.
         released_at:
           anyOf:
           - type: string
@@ -14256,6 +14384,19 @@ components:
         aup_version:
           type: string
           title: Aup Version
+        aup_accepted:
+          type: boolean
+          title: Aup Accepted
+          description: Whether a person accepted the acceptable use policy and the terms for this order. False for
+            an order a key created until the payer accepts on the order's page; the checkout needs it.
+          default: true
+        status_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status Url
+          description: The order's page for the person who pays or confirms, with a fresh status token. Present
+            on a read by a key or session of the order's organization while the order is not done.
         warnings:
           items:
             additionalProperties: true
@@ -14465,6 +14606,12 @@ components:
           - type: 'null'
           title: Resend Allowed At
           description: When the confirmation mail may be asked for again; null when it may not.
+        queue:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeQueue'
+          - type: 'null'
+          description: The wait for a carrier line while the order has not ended and its fax is not on a line yet.
+            Null for an ended order, a fax that is sending, and a test order.
         released_at:
           anyOf:
           - type: string
@@ -14493,6 +14640,15 @@ components:
         aup_version:
           type: string
           title: Aup Version
+        aup_accepted:
+          type: boolean
+          title: Aup Accepted
+          description: Whether a person accepted the acceptable use policy and the terms for this order. False for
+            an order a key created until the payer accepts on the order's page; the checkout needs it.
+          default: true
+        status_url:
+          type: string
+          title: Status Url
         warnings:
           items:
             additionalProperties: true
@@ -14515,9 +14671,6 @@ components:
         status_token:
           type: string
           title: Status Token
-        status_url:
-          type: string
-          title: Status Url
       additionalProperties: true
       type: object
       required:
@@ -14551,10 +14704,10 @@ components:
       - fax_job_id
       - failure_code
       - aup_version
+      - status_url
       - created_at
       - updated_at
       - status_token
-      - status_url
       title: OneTimeOrderCreated
       description: |-
         The create answer: the order plus the status token. The token reads this one order, opens its
@@ -14607,6 +14760,28 @@ components:
       - extra_page_micro
       - cover_included
       title: OneTimePrice
+    OneTimeQueue:
+      properties:
+        queued:
+          type: boolean
+          title: Queued
+        jobs_ahead:
+          type: integer
+          title: Jobs Ahead
+        estimated_wait_minutes:
+          type: integer
+          title: Estimated Wait Minutes
+      additionalProperties: true
+      type: object
+      required:
+      - queued
+      - jobs_ahead
+      - estimated_wait_minutes
+      title: OneTimeQueue
+      description: |-
+        The wait for a carrier line. ``queued`` is true when a fax sent now, or this order's waiting fax,
+        is estimated to wait more than ten minutes for a line: the order is kept and sent in turn, never
+        dropped. The minutes are an estimate from the number of faxes ahead and the carrier's line count.
     OneTimeRoute:
       properties:
         label:

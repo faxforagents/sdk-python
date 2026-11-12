@@ -177,9 +177,88 @@ def test_checkout(keyless: Client, api: respx.MockRouter) -> None:
     assert sent.headers["idempotency-key"]
 
 
-def test_get_by_token_and_confirm(keyless: Client, api: respx.MockRouter) -> None:
+def test_read_by_token_posts_the_token_in_the_body(keyless: Client, api: respx.MockRouter) -> None:
+    route = api.post("/v1/one-time-sends/by-token").respond(200, json=CASES["by_token"])
+    summary = keyless.one_time_sends.read_by_token("mail-token")
+    assert summary.order_id == ORDER
+    sent = route.calls.last.request
+    assert json.loads(sent.content) == {"token": "mail-token"}
+    assert "mail-token" not in str(sent.url)
+    assert "authorization" not in sent.headers
+
+
+def test_get_by_token_still_works_and_warns(keyless: Client, api: respx.MockRouter) -> None:
     api.get("/v1/one-time-sends/by-token/mail-token").respond(200, json=CASES["by_token"])
-    summary = keyless.one_time_sends.get_by_token("mail-token")
+    with pytest.warns(DeprecationWarning, match="read_by_token"):
+        summary = keyless.one_time_sends.get_by_token("mail-token")
+    assert summary.order_id == ORDER
+
+
+def test_from_quote_sends_accept_aup_only_when_given(client: Client, api: respx.MockRouter) -> None:
+    created = {**CASES["created"], "aup_accepted": False}
+    route = api.post("/v1/one-time-sends/from-quote").respond(201, json=created)
+    order = client.one_time_sends.create_from_quote(
+        quote_id="quote_" + "6" * 32, sender_name="Dana Example", approval_id="apr_1"
+    )
+    assert order.aup_accepted is False
+    assert order.status_url
+    assert json.loads(route.calls.last.request.content) == {
+        "quote_id": "quote_" + "6" * 32,
+        "sender_name": "Dana Example",
+        "approval_id": "apr_1",
+    }
+
+
+def test_checkout_accept_aup(keyless: Client, api: respx.MockRouter) -> None:
+    route = api.post(f"/v1/one-time-sends/{ORDER}/checkout").respond(201, json=CASES["checkout"])
+    keyless.one_time_sends.checkout(ORDER, order_token=TOKEN)
+    assert json.loads(route.calls.last.request.content) == {}
+    keyless.one_time_sends.checkout(ORDER, order_token=TOKEN, accept_aup=True)
+    assert json.loads(route.calls.last.request.content) == {"accept_aup": True}
+    assert route.calls.last.request.headers["x-ffa-order-token"] == TOKEN
+
+
+def test_queue_and_new_order_fields(keyless: Client, api: respx.MockRouter) -> None:
+    queue = {"queued": True, "jobs_ahead": 7, "estimated_wait_minutes": 14}
+    api.get("/v1/one-time-sends/config").respond(200, json={**CASES["config"], "queue": queue})
+    config = keyless.one_time_sends.config()
+    assert config.queue is not None
+    assert config.queue.queued is True
+    assert config.queue.estimated_wait_minutes == 14
+    body = {
+        **CASES["checkout_open"],
+        "queue": queue,
+        "aup_accepted": False,
+        "status_url": "https://faxforagents.com/send/status/x",
+    }
+    api.get(f"/v1/one-time-sends/{ORDER}").respond(200, json=body)
+    order = keyless.one_time_sends.get(ORDER, order_token=TOKEN)
+    assert order.queue is not None and order.queue.jobs_ahead == 7
+    assert order.aup_accepted is False
+    assert order.status_url == "https://faxforagents.com/send/status/x"
+    api.get(f"/v1/one-time-sends/{ORDER}").respond(200, json=CASES["checkout_open"])
+    older = keyless.one_time_sends.get(ORDER, order_token=TOKEN)
+    assert older.queue is None
+    assert older.aup_accepted is True
+
+
+def test_balance_top_up_url(client: Client, api: respx.MockRouter) -> None:
+    api.get("/v1/balance").respond(
+        200,
+        json={
+            "available_micro": 0,
+            "held_micro": 0,
+            "currency": "USD",
+            "environment": "live",
+            "top_up_url": "https://app.faxforagents.com/app/billing",
+        },
+    )
+    assert client.billing.balance().top_up_url == "https://app.faxforagents.com/app/billing"
+
+
+def test_get_by_token_and_confirm(keyless: Client, api: respx.MockRouter) -> None:
+    api.post("/v1/one-time-sends/by-token").respond(200, json=CASES["by_token"])
+    summary = keyless.one_time_sends.read_by_token("mail-token")
     assert summary.state == "ok"
     assert summary.order_id == ORDER
     route = api.post(f"/v1/one-time-sends/{ORDER}/confirm").respond(200, json=CASES["confirmed"])
@@ -247,14 +326,34 @@ def test_insufficient_balance_one_time_offer(client: Client, api: respx.MockRout
         client.faxes.create(quote_id="quote_" + "6" * 32)
     assert exc.value.details["needed_micro"] == 78000
     assert exc.value.one_time_offer is None
-    offer = {"amount_micro": 2490000, "currency": "USD", "document_pages": 2}
+    assert exc.value.top_up_url is None
+    offer = {
+        "amount_micro": 2490000,
+        "currency": "USD",
+        "document_pages": 2,
+        "included_pages": 5,
+        "extra_page_micro": 490000,
+        "max_document_pages": 20,
+        "approval_id": "apr_1",
+    }
     with_offer = error(
-        "insufficient_balance", details={"available_micro": 0, "needed_micro": 78000, "one_time_offer": offer}
+        "insufficient_balance",
+        details={
+            "available_micro": 0,
+            "needed_micro": 78000,
+            "top_up_url": "https://app.faxforagents.com/app/billing",
+            "one_time_offer": offer,
+        },
     )
     api.post("/v1/faxes").respond(402, json=with_offer)
     with pytest.raises(PaymentRequiredError) as exc:
         client.faxes.create(quote_id="quote_" + "6" * 32)
     assert exc.value.one_time_offer == offer
+    found = exc.value.one_time_offer
+    assert found is not None
+    assert found["amount_micro"] == 2490000
+    assert found["approval_id"] == "apr_1"
+    assert exc.value.top_up_url == "https://app.faxforagents.com/app/billing"
 
 
 async def test_async_flow(api: respx.MockRouter) -> None:

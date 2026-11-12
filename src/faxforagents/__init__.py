@@ -18,7 +18,7 @@ Documentation: https://faxforagents.com/docs. The API reference: https://faxfora
 
 from __future__ import annotations
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 from faxforagents._http import ORDER_TOKEN_HEADER
 from faxforagents.async_client import AsyncClient
@@ -32,6 +32,7 @@ from faxforagents.errors import (
     FaxForAgentsError,
     InvalidRequestError,
     NotFoundError,
+    OneTimeOffer,
     PaymentRequiredError,
     RateLimitedError,
     ScopeError,
@@ -51,6 +52,7 @@ __all__ = [
     "InvalidRequestError",
     "NotFoundError",
     "ORDER_TOKEN_HEADER",
+    "OneTimeOffer",
     "PaymentRequiredError",
     "RateLimitedError",
     "ScopeError",

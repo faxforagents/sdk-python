@@ -119,7 +119,7 @@ each call needs.
 | `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `download_export_archive` |
 | `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `revoke_invitation` |
 | `ffa.oauth` | `list_grants`, `iter_grants`, `revoke_grant` |
-| `ffa.one_time_sends` | `config`, `create`, `create_from_quote`, `list`, `iter`, `get`, `wait`, `checkout`, `get_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
+| `ffa.one_time_sends` | `config`, `create`, `create_from_quote`, `list`, `iter`, `get`, `wait`, `checkout`, `read_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
 
 `ffa.request("GET", "/v1/anything")` reaches an operation the resources do not cover yet.
 
@@ -214,16 +214,33 @@ With a live key, `create_from_quote` turns a quote the wallet does not cover int
 from faxforagents import PaymentRequiredError
 
 try:
-    fax = ffa.faxes.create(quote_id=quote.id)
-except PaymentRequiredError:
-    order = ffa.one_time_sends.create_from_quote(
-        quote_id=quote.id, sender_name="Dana Example", accept_aup=True, approval_id=approval_id
-    )
+    fax = ffa.faxes.create(quote_id=quote.id, approval_id=approval_id)
+except PaymentRequiredError as exc:
+    print(exc.top_up_url)                         # where a person adds funds to the wallet
+    offer = exc.one_time_offer                    # None when this send has no card path
+    if offer:
+        print(offer["amount_micro"])              # the one-time price of this document
+        order = ffa.one_time_sends.create_from_quote(
+            quote_id=quote.id, sender_name="Dana Example", approval_id=offer["approval_id"]
+        )
+        print(order.status_url)                   # hand this page to the person who pays
 ```
 
-Paying by card does not replace approval. The send must have an approval or a delegated policy, as a
-wallet send does. `confirm(order_id, token=...)` and `get_by_token(token)` serve a page of your own
-that receives the mailed link. The amounts are on the [pricing page](https://faxforagents.com/pricing/)
+Paying by card does not replace approval. With a key, a card order must have an approval or a
+delegated policy, as a wallet send does. Pass the approval as `approval_id`. Without either the answer is 403
+`approval_required`.
+
+The person who pays accepts the acceptable use policy and the terms on the order page, never the key.
+With a key, the order answers `aup_accepted` false and a `status_url`. Give that link to the payer.
+On a page of your own, `checkout(order.id, order_token=token, accept_aup=True)` records the payer's
+acceptance and opens the payment.
+
+`order.queue` and `config().queue` tell whether a fax would wait for a carrier line, with `jobs_ahead`
+and `estimated_wait_minutes`. A queued order is kept and sent in turn.
+
+`confirm(order_id, token=...)` and `read_by_token(token)` serve a page of your own that receives the
+mailed link. `read_by_token` posts the token, so it stays out of the address. `get_by_token` still
+works and is deprecated. The amounts are on the [pricing page](https://faxforagents.com/pricing/)
 and in `config().routes`, in micro-units.
 
 ## Webhooks
@@ -277,7 +294,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.16.1 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.17.0 and keeps the schemas of the earlier live documents.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.

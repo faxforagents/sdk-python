@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.1 (2026-11-12)
+
+Follows API 1.17.0. The saved spec has 145 operations and the models are regenerated from it.
+
+`one_time_sends.create_from_quote` no longer requires `accept_aup`. It is sent only when given. `approval_id` still carries the approval of a card order.
+`one_time_sends.checkout` takes `accept_aup`. An order whose `aup_accepted` is false needs `accept_aup=True` once, with `order_token`. The payer accepts the terms on the order page, never a key.
+New call `one_time_sends.read_by_token(token)`: the read of a mailed confirmation link, with the token in the body. `get_by_token` still works and raises a `DeprecationWarning`.
+
+`OneTimeOrder` and `OneTimeOrderCreated` carry `aup_accepted`, `status_url` and `queue`. `OneTimeConfig` carries `queue`.
+New model `OneTimeQueue` with `queued`, `jobs_ahead` and `estimated_wait_minutes`.
+`Balance` carries `top_up_url`. `Capabilities` carries `extraction_pricing`.
+
+`PaymentRequiredError.top_up_url` reads `details["top_up_url"]`, the page where a person adds funds.
+`PaymentRequiredError.one_time_offer` is typed as `OneTimeOffer`, a `TypedDict` exported by the package. It is still a plain dict at run time.
+Other model names, fields and optionality are kept.
+
 ## 0.4.0 (2026-11-12)
 
 New resource `one_time_sends` on both clients: one fax paid by card, with no wallet.
