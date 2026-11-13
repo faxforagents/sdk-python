@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.18.0.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.0.
 # All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.18.0
+  version: 1.20.0
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -5379,7 +5379,7 @@ paths:
     patch:
       tags:
       - numbers
-      summary: Label and inbound route of a number
+      summary: Label, inbound route and PDF by mail of a number
       operationId: update_number
       parameters:
       - name: number_id
@@ -9350,9 +9350,6 @@ components:
         price_micro:
           type: integer
           title: Price Micro
-        provider_cost_micro:
-          type: integer
-          title: Provider Cost Micro
         currency:
           type: string
           title: Currency
@@ -9405,7 +9402,6 @@ components:
       - output
       - models
       - price_micro
-      - provider_cost_micro
       - currency
       - error_code
       - created_by
@@ -9501,11 +9497,6 @@ components:
           x-sdk-route: GET /v1/extractions/{extraction_id}
         strong_read:
           type: boolean
-          description: Returned by GET /v1/extractions/{extraction_id}. Declared here until the public schema includes
-            it.
-          x-sdk-route: GET /v1/extractions/{extraction_id}
-        cost_micro:
-          type: integer
           description: Returned by GET /v1/extractions/{extraction_id}. Declared here until the public schema includes
             it.
           x-sdk-route: GET /v1/extractions/{extraction_id}
@@ -10661,6 +10652,12 @@ components:
         inbound_status:
           type: string
           title: Inbound Status
+        email_pdf:
+          type: boolean
+          title: Email Pdf
+          description: When true, the notice mail of a fax received on this number carries the PDF as an attachment.
+            Live numbers only. Off by default.
+          default: false
         provider:
           type: string
           title: Provider
@@ -10875,6 +10872,14 @@ components:
           - type: string
           - type: 'null'
           title: Inbound Webhook Id
+        email_pdf:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Email Pdf
+          description: Attach the PDF of each received fax to the notice mail. The mail goes to the verified address
+            of an owner of the organization and to no other address. A PDF over 15 MB is not attached. It needs
+            the scope number:buy. An agent, an OAuth connection and a connected app are refused.
       additionalProperties: false
       type: object
       title: NumberUpdate

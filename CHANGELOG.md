@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.0 (2026-11-13)
+
+Follows API 1.20.0. The saved spec has 145 operations and the models are regenerated from it.
+No client method was added or removed.
+
+New: `Number.email_pdf`, a boolean. When true, the notice mail of a received fax carries the PDF.
+A number read from an older server has `email_pdf` equal to `False`.
+`numbers.update(number_id, email_pdf=True)` switches it on, with the scope `number:buy`. An agent key is refused.
+`email_pdf` is sent only when given. `False` is sent and switches the attachment off.
+
+Breaking: `Extraction.provider_cost_micro` is removed. The server stopped sending it at API 1.19.0.
+Breaking: `ExtractionPage.cost_micro` is removed, for the same reason.
+Code that read either field has to stop. `Extraction.price_micro` is the price the wallet paid, as before.
+Fixed: 0.5.0 required `provider_cost_micro`, so every extraction call failed to parse on API 1.19.0 and later.
+This covers extractions, classifications and summaries. 0.6.0 parses them.
+
+The ledger no longer lists `provider_cost` entries. `billing.list_ledger` and its models did not change.
+Other model names, fields and optionality are kept.
+
 ## 0.5.0 (2026-11-12)
 
 Follows API 1.18.0. The saved spec has 145 operations and the models are regenerated from it.

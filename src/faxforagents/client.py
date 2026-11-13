@@ -957,7 +957,9 @@ class Numbers(_Resource):
         return self._h.request("GET", f"/v1/numbers/{number_id}", model=m.Number)
 
     def update(self, number_id: str, *, idempotency_key: str | None = None, **changes: Any) -> m.Number:
-        """Change the label, project or inbound webhook of a number. Scope: number:buy."""
+        """Change the label, project, inbound webhook or ``email_pdf`` of a number. Scope: number:buy.
+
+        ``email_pdf=True`` attaches the PDF of each received fax to the notice mail. No agent key."""
         body = m.NumberUpdate(**changes)
         return self._h.request(
             "PATCH", f"/v1/numbers/{number_id}", model=m.Number, json=body, idempotency_key=idempotency_key
