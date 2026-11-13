@@ -179,6 +179,7 @@
       "project_id": null,
       "inbound_webhook_id": null,
       "inbound_status": "enabled",
+      "email_pdf": false,
       "provider": "sandbox",
       "monthly_micro": 0,
       "currency": "USD",
@@ -309,8 +310,7 @@
       "escalated": false,
       "fast_read": true,
       "strong_read": false,
-      "warnings": [],
-      "cost_micro": 0
+      "warnings": []
     }
   },
   {

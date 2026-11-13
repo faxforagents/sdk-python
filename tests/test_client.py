@@ -425,3 +425,96 @@ def test_list_api_keys_reads_connected_app(client: Client, api: respx.MockRouter
     plain = {k: v for k, v in api_key_with_secret(id="key_plain").items() if k != "secret"}
     api.get("/v1/api-keys").respond(200, json={"items": [flagged, plain]})
     assert [k.connected_app for k in client.identity.list_api_keys().items] == [True, False]
+
+
+def number(**over: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "id": "num_1",
+        "environment": "live",
+        "e164": "+15550001001",
+        "country": "US",
+        "number_type": "local",
+        "locality": None,
+        "status": "active",
+        "label": None,
+        "project_id": None,
+        "inbound_webhook_id": None,
+        "inbound_status": "enabled",
+        "email_pdf": False,
+        "provider": "carrier",
+        "monthly_micro": 2000000,
+        "currency": "USD",
+        "order_id": "nord_1",
+        "created_at": "2026-11-13T00:00:00Z",
+        "activated_at": "2026-11-13T00:00:00Z",
+        "renews_at": None,
+        "released_at": None,
+    }
+    base.update(over)
+    return base
+
+
+def test_update_number_sends_email_pdf_only_when_given(client: Client, api: respx.MockRouter) -> None:
+    route = api.patch("/v1/numbers/num_1")
+    route.side_effect = [
+        httpx.Response(200, json=number(email_pdf=True)),
+        httpx.Response(200, json=number(email_pdf=False)),
+        httpx.Response(200, json=number(label="front desk")),
+    ]
+    assert client.numbers.update("num_1", email_pdf=True).email_pdf is True
+    assert json.loads(route.calls.last.request.content) == {"email_pdf": True}
+    # False is a value, not an omission: it switches the attachment off.
+    assert client.numbers.update("num_1", email_pdf=False).email_pdf is False
+    assert json.loads(route.calls.last.request.content) == {"email_pdf": False}
+    client.numbers.update("num_1", label="front desk")
+    assert json.loads(route.calls.last.request.content) == {"label": "front desk"}
+
+
+def test_number_from_an_older_server_reads_email_pdf_as_false(client: Client, api: respx.MockRouter) -> None:
+    older = {k: v for k, v in number().items() if k != "email_pdf"}
+    api.get("/v1/numbers/num_1").respond(200, json=older)
+    assert client.numbers.get("num_1").email_pdf is False
+
+
+def test_extraction_parses_without_the_provider_cost(client: Client, api: respx.MockRouter) -> None:
+    # API 1.19.0 stopped sending provider_cost_micro and the cost_micro of each page.
+    body = {
+        "id": "ext_1",
+        "kind": "extract",
+        "status": "completed",
+        "environment": "test",
+        "document_id": "doc_1",
+        "inbox_item_id": None,
+        "schema_id": None,
+        "schema": None,
+        "options": {},
+        "pages_requested": 1,
+        "pages_processed": 1,
+        "pages_escalated": 0,
+        "document_pages": 1,
+        "confidence": 0.95,
+        "pages": [
+            {
+                "page": 1,
+                "text": "Fixture text",
+                "confidence": 0.95,
+                "status": "ok",
+                "model": "sandbox",
+                "warnings": [],
+            }
+        ],
+        "output": None,
+        "models": {},
+        "price_micro": 0,
+        "currency": "USD",
+        "error_code": None,
+        "created_by": "key:ffa_test_aaaa",
+        "created_at": "2026-11-13T00:00:00Z",
+        "started_at": "2026-11-13T00:00:00Z",
+        "completed_at": "2026-11-13T00:00:01Z",
+    }
+    api.get("/v1/extractions/ext_1").respond(200, json=body)
+    extraction = client.extractions.get("ext_1")
+    assert extraction.price_micro == 0
+    assert "provider_cost_micro" not in type(extraction).model_fields
+    assert "cost_micro" not in type(extraction.pages[0]).model_fields

@@ -15,6 +15,9 @@ Policy evaluations also return usage when a policy applies.
 Fax jobs, quotes, extraction pages and inbound summaries needed the route-documented additions.
 Capabilities gains `one_time` from the updated snapshot.
 
+At API 1.20.0, server revision `3c06d076f0f5cfe477c42b71857cbdda9767884e`, the number gains `email_pdf` from `numbers/service.py`.
+The extraction page loses `cost_micro`, which `ocr/service.py` no longer sends.
+
 ## One-time sends (`one-time.json`)
 
 Server source revision: `5bee3b046dbcb5bc0fbf98ae59c1a40a1c8c1434`, API 1.16.1.
