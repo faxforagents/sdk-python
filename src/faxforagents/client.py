@@ -162,11 +162,13 @@ class Documents(_Resource):
         *,
         filename: str,
         size_bytes: int,
-        content_type: str = "application/pdf",
+        content_type: str | None = None,
         idempotency_key: str | None = None,
     ) -> m.UploadSession:
         """Open an upload session with a signed PUT URL (25 MiB, one hour). ``content_type`` is
-        application/pdf, image/png, image/jpeg or image/tiff. Scope: document:write."""
+        application/pdf, image/png, image/jpeg or image/tiff. Left out, the API reads the type from
+        the filename and the session says which it took. A filename of another format is refused
+        here with ``unsupported_format``. Scope: document:write."""
         body = m.UploadCreate(filename=filename, size_bytes=size_bytes, content_type=content_type)
         return self._h.request(
             "POST", "/v1/uploads", model=m.UploadSession, json=body, idempotency_key=idempotency_key
@@ -502,6 +504,13 @@ class Billing(_Resource):
         """Read a top-up session. Scope: billing:read."""
         return self._h.request("GET", f"/v1/topup-sessions/{topup_session_id}", model=m.TopupSession)
 
+    def get_topup_receipt(self, topup_session_id: str) -> m.PaymentReceipt:
+        """The payment receipt of a paid top-up, an automatic one included. ``url`` is the hosted
+        receipt. ``ConflictError`` while the top-up is not paid. Scope: billing:read."""
+        return self._h.request(
+            "GET", f"/v1/topup-sessions/{topup_session_id}/receipt", model=m.PaymentReceipt
+        )
+
     def list_auto_topups(self) -> m.AutoTopupList:
         """Auto top-up settings. Scope: billing:read."""
         return self._h.request("GET", "/v1/auto-topups", model=m.AutoTopupList)
@@ -573,6 +582,11 @@ class Billing(_Resource):
     def get_invoice(self, invoice_id: str) -> m.Invoice:
         """One invoice. Scope: billing:read."""
         return self._h.request("GET", f"/v1/invoices/{invoice_id}", model=m.Invoice)
+
+    def get_invoice_receipt(self, invoice_id: str) -> m.PaymentReceipt:
+        """The payment receipt of a paid invoice. ``url`` is the hosted receipt. ``ConflictError``
+        while the invoice is not paid. Scope: billing:read."""
+        return self._h.request("GET", f"/v1/invoices/{invoice_id}/receipt", model=m.PaymentReceipt)
 
     def create_subscription_checkout(self, *, idempotency_key: str | None = None) -> m.SubscriptionCheckout:
         """A hosted Checkout for the Agent workspace subscription. Scope: billing:write."""

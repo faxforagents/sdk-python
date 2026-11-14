@@ -81,6 +81,8 @@ The same in async form, with `AsyncClient` and `await` on every call.
 - `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF): the
   upload session, the signed PUT with the content type read from the filename, the sha256 check, the
   document. An image becomes gray letter pages.
+- `documents.create_upload(filename=..., size_bytes=...)` needs no `content_type`. The API reads the
+  type from the filename and refuses a filename of another format at once with `unsupported_format`.
 - `faxes.wait(fax_id)` and `approvals.wait(approval_id)` poll with a timeout.
 - `verify_webhook(secret, headers, body)` checks the Standard Webhooks signature on a delivery.
 - Models are pydantic v2, generated from the public OpenAPI document. Money is an integer count of
@@ -108,7 +110,7 @@ each call needs.
 | `ffa.faxes` | `create`, `list`, `iter`, `get`, `wait`, `list_events`, `list_attempts`, `get_receipt`, `get_receipt_pdf`, `cancel` |
 | `ffa.webhooks` | `list`, `create`, `update`, `delete`, `rotate_secret`, `test`, `list_deliveries`, `replay_delivery` |
 | `ffa.events` | `list`, `iter` |
-| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `usage`, exports, invoices, subscriptions, `create_portal_session` |
+| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `usage`, exports, invoices, `get_invoice_receipt`, `get_topup_receipt`, subscriptions, `create_portal_session` |
 | `ffa.platform` | `capabilities`, `service_status` |
 | `ffa.sandbox` | `list_scenarios`, `create_scenario`, `create_inbound_fax`, `reset` |
 | `ffa.approvals` | `request`, `request_help`, `list`, `iter`, `get`, `wait`, `approve`, `reject`, `revoke` |
@@ -151,6 +153,10 @@ except APIError as exc:
 `PaymentRequiredError` (402), `InvalidRequestError` (400, 422), `RateLimitedError` (429) and
 `ServerError` (5xx) are all `APIError`. `APIConnectionError` and `APITimeoutError` mean the API was
 not reached.
+
+`NotFoundError.field` names the id that was not found when the API says which: on a quote it is
+`document_id` or `from`. `ConflictError.state` is the state of a fax whose receipt was asked for
+before the fax ended. Both are `None` when the API sent no such detail.
 
 Every refusal is the same envelope, a 422 for a field that fails validation included. A 413
 `payload_too_large` is a plain `APIError`: the body is over the limit of its route. The published
@@ -299,7 +305,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.0 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.20.5 and keeps the schemas of the earlier live documents.
 The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
 It also retains earlier public model names and route-documented response additions.

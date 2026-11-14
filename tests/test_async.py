@@ -107,3 +107,38 @@ async def test_async_create_api_key_sends_connected_app_only_when_given(
     assert route.calls.last.request.headers["idempotency-key"] == "k1"
     assert (await aclient.identity.create_api_key("plain")).connected_app is False
     assert "connected_app" not in json.loads(route.calls.last.request.content)
+
+
+async def test_async_receipts_and_an_upload_without_a_type(
+    aclient: AsyncClient, api: respx.MockRouter
+) -> None:
+    receipt = {
+        "url": "https://pay.example.test/receipts/1",
+        "amount_micro": 25_000_000,
+        "amount_refunded_micro": 0,
+        "currency": "USD",
+        "payment_intent_id": "pi_1",
+        "paid_at": None,
+    }
+    api.get("/v1/invoices/in_1/receipt").respond(200, json={**receipt, "invoice_id": "in_1"})
+    api.get("/v1/topup-sessions/tus_1/receipt").respond(200, json={**receipt, "topup_session_id": "tus_1"})
+    assert (await aclient.billing.get_invoice_receipt("in_1")).invoice_id == "in_1"
+    assert (await aclient.billing.get_topup_receipt("tus_1")).topup_session_id == "tus_1"
+    create = api.post("/v1/uploads").respond(
+        201,
+        json={
+            "id": "upl_" + "6" * 32,
+            "status": "open",
+            "filename": "scan.png",
+            "content_type": "image/png",
+            "declared_size": 9,
+            "received_size": 0,
+            "sha256": None,
+            "created_at": "2026-11-14T00:00:00Z",
+            "expires_at": "2026-11-14T01:00:00Z",
+            "completed_at": None,
+        },
+    )
+    session = await aclient.documents.create_upload(filename="scan.png", size_bytes=9)
+    assert session.content_type == "image/png"
+    assert b"content_type" not in create.calls.last.request.content

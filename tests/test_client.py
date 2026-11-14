@@ -518,3 +518,113 @@ def test_extraction_parses_without_the_provider_cost(client: Client, api: respx.
     assert extraction.price_micro == 0
     assert "provider_cost_micro" not in type(extraction).model_fields
     assert "cost_micro" not in type(extraction.pages[0]).model_fields
+
+
+def upload_session(**over: object) -> dict[str, object]:
+    return {
+        "id": "upl_" + "6" * 32,
+        "status": "open",
+        "filename": "scan.png",
+        "content_type": "image/png",
+        "declared_size": 9,
+        "received_size": 0,
+        "sha256": None,
+        "created_at": "2026-11-14T00:00:00Z",
+        "expires_at": "2026-11-14T01:00:00Z",
+        "completed_at": None,
+        "upload_url": f"{BASE}/v1/uploads/upl_6666/content?exp=1&sig=abc",
+        "upload_method": "PUT",
+        "upload_url_expires_at": "2026-11-14T00:10:00Z",
+        **over,
+    }
+
+
+def test_create_upload_leaves_the_content_type_to_the_api(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.5 reads the type from the filename. 0.6.0 sent application/pdf for every file."""
+    create = api.post("/v1/uploads").respond(201, json=upload_session())
+    session = client.documents.create_upload(filename="scan.png", size_bytes=9)
+    assert json.loads(create.calls.last.request.content) == {"filename": "scan.png", "size_bytes": 9}
+    assert session.content_type == "image/png"
+    client.documents.create_upload(filename="scan.png", size_bytes=9, content_type="image/png")
+    assert json.loads(create.calls.last.request.content) == {
+        "filename": "scan.png",
+        "size_bytes": 9,
+        "content_type": "image/png",
+    }
+
+
+def test_create_upload_refuses_an_office_filename_at_once(api: respx.MockRouter) -> None:
+    api.post("/v1/uploads").respond(
+        422, json=error("unsupported_format", "letter.docx is not a PDF or an image", details=None)
+    )
+    with Client(KEY, base_url=BASE, max_retries=0) as c, pytest.raises(InvalidRequestError) as exc:
+        c.documents.create_upload(filename="letter.docx", size_bytes=9)
+    assert exc.value.code == "unsupported_format" and exc.value.status == 422
+
+
+def receipt(**over: object) -> dict[str, object]:
+    return {
+        "url": "https://pay.example.test/receipts/1",
+        "pdf_url": "https://pay.example.test/receipts/1/pdf",
+        "amount_micro": 25_000_000,
+        "amount_refunded_micro": 0,
+        "currency": "USD",
+        "payment_intent_id": "pi_1",
+        "paid_at": "2026-11-14T19:15:26Z",
+        **over,
+    }
+
+
+def test_payment_receipts_of_an_invoice_and_a_topup(client: Client, api: respx.MockRouter) -> None:
+    """The two read routes of API 1.20.5. Either id may be absent from the answer."""
+    invoice = api.get("/v1/invoices/in_1/receipt").respond(200, json=receipt(invoice_id="in_1"))
+    topup = api.get("/v1/topup-sessions/tus_1/receipt").respond(200, json=receipt(topup_session_id="tus_1"))
+    paid = client.billing.get_invoice_receipt("in_1")
+    assert paid.url.endswith("/receipts/1") and paid.amount_micro == 25_000_000
+    assert paid.invoice_id == "in_1" and paid.topup_session_id is None
+    added = client.billing.get_topup_receipt("tus_1")
+    assert added.topup_session_id == "tus_1" and added.invoice_id is None and added.pdf_url
+    for route in (invoice, topup):
+        assert route.calls.last.request.method == "GET"
+        assert "idempotency-key" not in route.calls.last.request.headers
+
+
+def test_an_unpaid_topup_has_no_receipt(client: Client, api: respx.MockRouter) -> None:
+    api.get("/v1/topup-sessions/tus_2/receipt").respond(
+        409, json=error("conflict", "this top-up was not paid", details={"status": "open"})
+    )
+    with pytest.raises(ConflictError) as exc:
+        client.billing.get_topup_receipt("tus_2")
+    assert exc.value.details == {"status": "open"} and exc.value.state is None
+
+
+def test_quote_not_found_names_the_field(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.5: the 404 of a quote says which of its two ids was not found."""
+    route = api.post("/v1/fax-quotes")
+    route.side_effect = [
+        httpx.Response(404, json=error("not_found", "no such document", details={"field": "document_id"})),
+        httpx.Response(404, json=error("not_found", "no such sender number", details={"field": "from"})),
+    ]
+    with pytest.raises(NotFoundError) as doc:
+        client.quotes.create(document_id="doc_" + "0" * 32, to="+15550000001")
+    assert doc.value.field == "document_id"
+    with pytest.raises(NotFoundError) as sender:
+        client.quotes.create(document_id="doc_" + "2" * 32, to="+15550000001", from_="+14155550199")
+    assert sender.value.field == "from"
+    # an older server sends no details, and a field that is not a name is not returned
+    api.get("/v1/faxes/fax_x").respond(404, json=error("not_found", "no", details=None))
+    with pytest.raises(NotFoundError) as plain:
+        client.faxes.get("fax_x")
+    assert plain.value.field is None
+    assert NotFoundError(status=404, code="not_found", message="no", details={"field": 7}).field is None
+
+
+def test_an_early_receipt_names_the_fax_state(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.5: 409 conflict on a receipt asked for too early carries details.state."""
+    api.get("/v1/faxes/fax_y/receipt").respond(
+        409, json=error("conflict", "no receipt yet: the fax is active", details={"state": "active"})
+    )
+    with pytest.raises(ConflictError) as exc:
+        client.faxes.get_receipt("fax_y")
+    assert exc.value.state == "active" and exc.value.code == "conflict" and exc.value.retryable is False
+    assert ConflictError(status=409, code="quote_consumed", message="used").state is None
