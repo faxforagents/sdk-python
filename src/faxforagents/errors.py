@@ -64,9 +64,27 @@ class ScopeError(APIError):
 class NotFoundError(APIError):
     """404 not_found: not an id of this organization, or deleted."""
 
+    @property
+    def field(self) -> str | None:
+        """``details["field"]``: the request field whose id was not found, else ``None``.
+
+        ``quotes.create`` takes two ids. The value is ``document_id`` or ``from``, the sender number.
+        Servers send it since API 1.20.5."""
+        name = self.details.get("field") if isinstance(self.details, dict) else None
+        return name if isinstance(name, str) else None
+
 
 class ConflictError(APIError):
     """409: the resource is in a state that refuses this change (``quote_consumed``, ``not_cancelable``)."""
+
+    @property
+    def state(self) -> str | None:
+        """``details["state"]``: the state the resource is in, else ``None``.
+
+        ``faxes.get_receipt`` on a fax that has not ended answers 409 with the fax state here. Read the
+        fax until it has ended, then ask again. Servers send it since API 1.20.5."""
+        value = self.details.get("state") if isinstance(self.details, dict) else None
+        return value if isinstance(value, str) else None
 
 
 class OneTimeOffer(TypedDict, total=False):

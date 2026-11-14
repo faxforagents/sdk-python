@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.1 (2026-11-15)
+
+Follows API 1.20.5. The saved spec has 147 operations and the models are regenerated from it.
+
+New: `billing.get_invoice_receipt(invoice_id)` and `billing.get_topup_receipt(topup_session_id)`, on both clients.
+Each returns the new model `PaymentReceipt`. `url` is the hosted receipt and `pdf_url` the same receipt as a PDF.
+Both need the scope `billing:read`. A payment that was not made raises `ConflictError`.
+
+Changed: `documents.create_upload` no longer needs `content_type`. Its default was `application/pdf`. It is now `None`, and the field is left out of the request.
+The API then reads the type from the filename. `scan.png` opens as `image/png`, and 0.6.0 opened it as a PDF.
+A filename of an unsupported format, such as `letter.docx`, raises `InvalidRequestError` with the code `unsupported_format` on this call.
+`UploadCreate.content_type` is `str | None` with the default `None`. `documents.upload` names the type itself, as before.
+
+New: `NotFoundError.field` is `details["field"]`. On `quotes.create` it is `document_id` or `from`, the id that was not found.
+New: `ConflictError.state` is `details["state"]`. `faxes.get_receipt` on a fax that has not ended carries the fax state there.
+Both are `None` when the server sent no such detail.
+
+The API now refuses an auto top-up threshold above 1000 USD and an agent `contact_email` that is not an address. Both raise `InvalidRequestError`.
+`Capabilities.scopes` is described as every scope the platform defines. `me()` returns the scopes of the API key.
+Other model names, fields and optionality are kept.
+
 ## 0.6.0 (2026-11-13)
 
 Follows API 1.20.0. The saved spec has 145 operations and the models are regenerated from it.
