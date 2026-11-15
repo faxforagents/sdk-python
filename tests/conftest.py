@@ -150,3 +150,23 @@ def api_key_with_secret(**over: Any) -> dict[str, Any]:
         "secret": "ffa_test_" + "a" * 43,
     }
     return {**base, **over}
+
+
+def topup_session(**over: Any) -> dict[str, Any]:
+    base = {
+        "id": "tus_" + "8" * 32,
+        "environment": "live",
+        "kind": "manual",
+        "amount_micro": 25_000_000,
+        "currency": "USD",
+        "status": "open",
+        "url": "https://checkout.example.test/c/pay_1",
+        "stripe_session_id": "cs_test_1",
+        "stripe_payment_intent_id": None,
+        "auto_topup_id": None,
+        "error": None,
+        "created_at": "2026-11-15T09:00:00Z",
+        "expires_at": "2026-11-16T09:00:00Z",
+        "completed_at": None,
+    }
+    return {**base, **over}

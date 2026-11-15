@@ -76,7 +76,10 @@ class Identity(_Resource):
         )
 
     async def rotate_api_key(self, key_id: str, *, idempotency_key: str | None = None) -> m.ApiKeyWithSecret:
-        """A new secret. The old one works 24 more hours. Scope: key:admin."""
+        """A new secret. The old one works 24 more hours. Scope: key:admin.
+
+        A key that expired cannot be rotated. It raises ``ConflictError`` with ``details["reason"]``
+        ``key_expired``. Create a new key to replace it."""
         return await self._h.request(
             "POST", f"/v1/api-keys/{key_id}/rotate", model=m.ApiKeyWithSecret, idempotency_key=idempotency_key
         )
@@ -481,6 +484,7 @@ class Billing(_Resource):
     async def statement(
         self,
         *,
+        type: str | None = None,
         kind: str | None = None,
         from_: str | None = None,
         to: str | None = None,
@@ -490,30 +494,38 @@ class Billing(_Resource):
         """The wallet statement, newest first: one line per event with the balance after it.
         Scope: billing:read.
 
-        ``kind`` keeps one kind of line: topup, fax, received_fax, number, extraction, release, refund,
-        dispute, credit, adjustment or other. ``from_`` and ``to`` are UTC days, YYYY-MM-DD, both
-        included. ``list_ledger`` stays the double-entry record."""
-        params = {"kind": kind, "from": from_, "to": to, "cursor": cursor, "limit": limit}
+        ``type`` keeps the lines of one type, as each line shows it. The types are topup, fax,
+        received_fax, number, extraction, release, refund, dispute, credit, adjustment and other.
+        ``kind`` is the same filter by its older name. Two different types in both raise
+        ``InvalidRequestError``. ``from_`` and ``to`` are UTC days, YYYY-MM-DD, both included.
+        ``list_ledger`` stays the double-entry record."""
+        params = {"type": type, "kind": kind, "from": from_, "to": to, "cursor": cursor, "limit": limit}
         return await self._h.request("GET", "/v1/statement", model=m.StatementPage, params=params)
 
     def iter_statement(
         self,
         *,
+        type: str | None = None,
         kind: str | None = None,
         from_: str | None = None,
         to: str | None = None,
         limit: int | None = None,
     ) -> AsyncIterator[m.StatementLine]:
         """Every statement line the filters select, following next_cursor."""
-        return apaginate(self.statement, {"kind": kind, "from_": from_, "to": to, "limit": limit})
+        filters = {"type": type, "kind": kind, "from_": from_, "to": to, "limit": limit}
+        return apaginate(self.statement, filters)
 
     async def statement_csv(
-        self, *, kind: str | None = None, from_: str | None = None, to: str | None = None
+        self,
+        *,
+        type: str | None = None,
+        kind: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
     ) -> str:
         """The statement as CSV text, every line the filters select in one answer. Scope: billing:read."""
-        data = await self._h.request(
-            "GET", "/v1/statement.csv", params={"kind": kind, "from": from_, "to": to}
-        )
+        params = {"type": type, "kind": kind, "from": from_, "to": to}
+        data = await self._h.request("GET", "/v1/statement.csv", params=params)
         return bytes(data).decode("utf-8")
 
     async def get_settings(self) -> m.BillingSettings:
@@ -558,9 +570,26 @@ class Billing(_Resource):
         """Read a top-up session. Scope: billing:read."""
         return await self._h.request("GET", f"/v1/topup-sessions/{topup_session_id}", model=m.TopupSession)
 
+    async def cancel_topup_session(
+        self, topup_session_id: str, *, idempotency_key: str | None = None
+    ) -> m.TopupSession:
+        """Cancel an open top-up, so nobody can pay its hosted Checkout any more. It reads ``canceled``.
+        Scope: billing:write, never an agent key.
+
+        Canceling a setup payment also turns off the auto top-up that waited on it. A top-up already
+        canceled or expired comes back as it is. One that was paid, declined or charged off session
+        raises ``ConflictError``, with the top-up's status in ``details["status"]``."""
+        return await self._h.request(
+            "POST",
+            f"/v1/topup-sessions/{topup_session_id}/cancel",
+            model=m.TopupSession,
+            idempotency_key=idempotency_key,
+        )
+
     async def get_topup_receipt(self, topup_session_id: str) -> m.PaymentReceipt:
         """The payment receipt of a paid top-up, an automatic one included. ``url`` is the hosted
-        receipt. ``ConflictError`` while the top-up is not paid. Scope: billing:read."""
+        receipt. ``pdf_url`` is ``None`` for an automatic top-up, which has no invoice and no PDF.
+        ``ConflictError`` while the top-up is not paid. Scope: billing:read."""
         return await self._h.request(
             "GET", f"/v1/topup-sessions/{topup_session_id}/receipt", model=m.PaymentReceipt
         )
@@ -1576,6 +1605,30 @@ class OneTimeSends(_Resource):
             "/v1/one-time-sends/preview",
             model=m.OneTimeInspection,
             files={"file": (name, data, ctype)},
+        )
+
+    async def check_cover(
+        self,
+        *,
+        sender_name: str | None = None,
+        email: str | None = None,
+        to: str | None = None,
+        to_name: str | None = None,
+        subject: str | None = None,
+        message: str | None = None,
+    ) -> m.OneTimeCoverRoom:
+        """Measure the room the cover sheet leaves for its message, before an order is made. Nothing is
+        stored. It works without an API key.
+
+        Pass the cover fields typed so far, as ``create`` takes them, and leave out the rest. ``fits``
+        says whether the message fits on the one cover page, and ``lines_left`` how many more lines
+        fit. When it runs over, ``fits_chars`` is how much of its start fits. ``create`` refuses a
+        cover that does not fit."""
+        body = m.OneTimeCoverCheck(
+            sender_name=sender_name, email=email, to=to, to_name=to_name, subject=subject, message=message
+        )
+        return await self._h.request(
+            "POST", "/v1/one-time-sends/cover-checks", model=m.OneTimeCoverRoom, json=body
         )
 
     async def create(

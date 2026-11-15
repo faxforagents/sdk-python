@@ -10,7 +10,14 @@ import httpx
 import pytest
 import respx
 
-from faxforagents import AsyncClient, Client, InvalidRequestError, NotFoundError, PaymentRequiredError
+from faxforagents import (
+    AsyncClient,
+    Client,
+    InvalidRequestError,
+    NotFoundError,
+    PaymentRequiredError,
+    ServerError,
+)
 from tests.conftest import BASE, KEY, error
 
 CASES: dict[str, Any] = {
@@ -419,3 +426,39 @@ def test_a_page_of_the_order_as_png(keyless: Client, api: respx.MockRouter) -> N
     api.get(f"/v1/one-time-sends/{ORDER}/pages/9").respond(404, json=error("not_found", "cannot be shown"))
     with pytest.raises(NotFoundError):
         keyless.one_time_sends.get_page(ORDER, 9, order_token=TOKEN)
+
+
+def test_cover_check_measures_the_message_with_no_key(keyless: Client, api: respx.MockRouter) -> None:
+    """API 1.20.8: the room on the cover sheet while the message is typed. Nothing is stored."""
+    route = api.post("/v1/one-time-sends/cover-checks")
+    route.side_effect = [
+        httpx.Response(200, json={"fits": True, "message_chars": 11, "lines_left": 24, "fits_chars": None}),
+        httpx.Response(
+            200, json={"fits": False, "message_chars": 2400, "lines_left": None, "fits_chars": 1980}
+        ),
+        httpx.Response(200, json={"fits": True, "message_chars": 0, "lines_left": None, "fits_chars": None}),
+    ]
+    room = keyless.one_time_sends.check_cover(
+        sender_name="Dana Example", to="+12025550123", message="Hello there"
+    )
+    assert room.fits is True and room.lines_left == 24 and room.fits_chars is None
+    sent = route.calls[0].request
+    assert json.loads(sent.content) == {
+        "sender_name": "Dana Example",
+        "to": "+12025550123",
+        "message": "Hello there",
+    }
+    assert "authorization" not in sent.headers
+    over = keyless.one_time_sends.check_cover(message="x" * 2400)
+    assert over.fits is False and over.lines_left is None and over.fits_chars == 1980
+    assert keyless.one_time_sends.check_cover().message_chars == 0
+    assert json.loads(route.calls[2].request.content) == {}
+
+
+def test_cover_check_is_refused_while_one_time_sends_are_off(keyless: Client, api: respx.MockRouter) -> None:
+    api.post("/v1/one-time-sends/cover-checks").respond(
+        503, json=error("one_time_unavailable", "one-time sends are switched off on this server")
+    )
+    with pytest.raises(ServerError) as exc:
+        keyless.one_time_sends.check_cover(message="hi")
+    assert exc.value.status == 503 and exc.value.code == "one_time_unavailable"

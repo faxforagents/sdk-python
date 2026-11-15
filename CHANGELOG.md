@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.8.0 (2026-11-15)
+
+Follows API 1.20.8. The saved spec has 163 operations and the models are regenerated from it.
+Every operation has a method on both clients.
+
+New: `billing.cancel_topup_session(topup_session_id)` closes the hosted Checkout of an open top-up and returns it with status `canceled`.
+Canceling a setup payment also turns off the auto top-up that waited on it. Scope `billing:write`, never an agent key.
+A top-up that was paid, declined or charged off session raises `ConflictError`, with its status in `details["status"]`.
+New: `one_time_sends.check_cover(...)` takes the cover fields typed so far and says whether the message fits on the cover page. It needs no key.
+It returns the new model `OneTimeCoverRoom` with `fits`, `message_chars`, `lines_left` and `fits_chars`. Nothing is stored.
+
+New parameter: `billing.statement`, `billing.iter_statement` and `billing.statement_csv` take `type`, the type each line shows.
+`kind` still works. It is the same filter by its older name, and two different types in both raise `InvalidRequestError`.
+
+Changed: five fields that the saved spec declared itself now follow the public document.
+`Quote.policy_evaluation` is a `PolicyVerdict` and `PolicyEvaluation.usage` a `PolicyUsage`. Both were dicts, so read them as attributes, such as `usage.day_jobs`.
+`Quote.pricing` is `per_page` or `one_time`, with `per_page` as the default. `PolicyEvaluation.decision` is `allow` or `deny`.
+`FaxJob.approval_id` and `FaxJob.policy_version_id` keep their type. `FaxJob.route_paused` is new and false by default.
+
+`identity.rotate_api_key` on a key that expired raises `ConflictError` with `details["reason"]` set to `key_expired`. Create a new key to replace it.
+`PaymentReceipt.pdf_url` is `None` for an automatic top-up, which has no invoice. Its `url` still opens the receipt.
+A statement line of a hold or a release names what it was for in `ref_type`: `fax_job`, `extraction` or `number_order`.
+The card of a one-time order is held, not authorized, in the docstrings and the model descriptions.
+New models `OneTimeCoverCheck`, `OneTimeCoverRoom`, `PolicyVerdict` and `PolicyUsage`. Other model names, fields and optionality are kept.
+
 ## 0.7.0 (2026-11-15)
 
 Follows API 1.20.6. The saved spec has 161 operations and the models are regenerated from it.
