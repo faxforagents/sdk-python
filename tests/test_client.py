@@ -21,7 +21,17 @@ from faxforagents import (
     ScopeError,
     ServerError,
 )
-from tests.conftest import BASE, KEY, api_key_with_secret, document, error, fax_job, quote, topup_session
+from tests.conftest import (
+    BASE,
+    KEY,
+    api_key_with_secret,
+    delivery,
+    document,
+    error,
+    fax_job,
+    quote,
+    topup_session,
+)
 
 
 def test_bearer_header_and_user_agent(client: Client, api: respx.MockRouter) -> None:
@@ -1070,3 +1080,45 @@ def test_an_automatic_topup_receipt_has_no_pdf(client: Client, api: respx.MockRo
     )
     found = client.billing.get_topup_receipt(tid)
     assert found.pdf_url is None and found.url.endswith("/receipts/payment/1")
+
+
+def test_a_topup_read_asks_stripe_only_when_told(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.10: check_checkout reads the hosted Checkout at Stripe. The default sends nothing."""
+    tid = topup_session()["id"]
+    route = api.get(f"/v1/topup-sessions/{tid}")
+    route.side_effect = [
+        httpx.Response(200, json=topup_session(checkout_status=None)),
+        httpx.Response(200, json=topup_session(checkout_status="complete")),
+        httpx.Response(200, json=topup_session()),
+    ]
+    plain = client.billing.get_topup_session(tid)
+    assert plain.status == "open" and plain.checkout_status is None
+    assert route.calls[0].request.url.query == b""
+    paid = client.billing.get_topup_session(tid, check_checkout=True)
+    assert paid.status == "open" and paid.checkout_status == "complete"
+    assert dict(route.calls[1].request.url.params) == {"check_checkout": "true"}
+    older = client.billing.get_topup_session(tid, check_checkout=False)
+    assert older.checkout_status is None
+    assert route.calls[2].request.url.query == b""
+
+
+def test_a_delivery_to_a_deleted_webhook_is_not_replayed(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.10: every delivery says whether its webhook was deleted, and a replay of one answers 409."""
+    ended = delivery(status="failed", error="the webhook was deleted", webhook_deleted=True)
+    older = delivery(id="dlv_2")
+    older.pop("webhook_deleted")
+    listed = api.get("/v1/webhook-deliveries").respond(
+        200, json={"items": [ended, older], "next_cursor": None}
+    )
+    items = client.webhooks.list_deliveries(webhook_id="wh_1").items
+    assert items[0].webhook_deleted is True and items[0].next_attempt_at is None
+    assert items[1].webhook_deleted is None
+    assert dict(listed.calls.last.request.url.params) == {"webhook_id": "wh_1"}
+    details = {"reason": "webhook_deleted"}
+    replay = api.post("/v1/webhook-deliveries/dlv_1/replay").respond(
+        409, json=error("conflict", "the webhook of this delivery was deleted", details=details)
+    )
+    with pytest.raises(ConflictError) as exc:
+        client.webhooks.replay_delivery("dlv_1")
+    assert exc.value.code == "conflict" and exc.value.details == details
+    assert len(replay.calls) == 1

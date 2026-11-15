@@ -17,6 +17,8 @@ Capabilities gains `one_time` from the updated snapshot.
 
 At API 1.20.0, server revision `3c06d076f0f5cfe477c42b71857cbdda9767884e`, the number gains `email_pdf` from `numbers/service.py`.
 The extraction page loses `cost_micro`, which `ocr/service.py` no longer sends.
+At API 1.20.10, server revision `da29794e1fb66a7f1486680a08a5d16402aee435`, the top-up session gains `checkout_status` from `billing/wallet.py`.
+It is null unless a read of an open top-up asks with `check_checkout=true`.
 
 ## One-time sends (`one-time.json`)
 

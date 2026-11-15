@@ -462,3 +462,19 @@ def test_cover_check_is_refused_while_one_time_sends_are_off(keyless: Client, ap
     with pytest.raises(ServerError) as exc:
         keyless.one_time_sends.check_cover(message="hi")
     assert exc.value.status == 503 and exc.value.code == "one_time_unavailable"
+
+
+def test_cover_check_refuses_a_field_over_the_limit_of_the_create(
+    keyless: Client, api: respx.MockRouter
+) -> None:
+    """API 1.20.10: the cover check states the limits of the create and refuses a longer field as it does."""
+    route = api.post("/v1/one-time-sends/cover-checks").respond(
+        422,
+        json=error(
+            "invalid_request", "cover.message is longer than 2000 characters", details={"field": "cover"}
+        ),
+    )
+    with pytest.raises(InvalidRequestError) as exc:
+        keyless.one_time_sends.check_cover(message="x" * 2001)
+    assert exc.value.status == 422 and exc.value.details == {"field": "cover"}
+    assert len(json.loads(route.calls.last.request.content)["message"]) == 2001

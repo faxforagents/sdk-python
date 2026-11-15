@@ -402,7 +402,10 @@ class Webhooks(_Resource):
         )
 
     async def delete(self, webhook_id: str, *, idempotency_key: str | None = None) -> m.Deleted:
-        """Remove a destination. Scope: webhook:admin."""
+        """Remove a destination. Scope: webhook:admin.
+
+        The deliveries that were waiting for it end at once, as ``failed`` with no next attempt. Every
+        delivery to it then reads ``webhook_deleted`` true and cannot be replayed."""
         return await self._h.request(
             "DELETE", f"/v1/webhooks/{webhook_id}", model=m.Deleted, idempotency_key=idempotency_key
         )
@@ -442,7 +445,10 @@ class Webhooks(_Resource):
         return await self._h.request("GET", f"/v1/webhook-deliveries/{delivery_id}", model=m.DeliveryDetail)
 
     async def replay_delivery(self, delivery_id: str, *, idempotency_key: str | None = None) -> m.Delivery:
-        """Deliver the event again with the same event id. Scope: webhook:admin."""
+        """Deliver the event again with the same event id. Scope: webhook:admin.
+
+        A delivery whose ``webhook_deleted`` is true cannot be replayed. It raises ``ConflictError``
+        with ``details["reason"]`` ``webhook_deleted``."""
         return await self._h.request(
             "POST",
             f"/v1/webhook-deliveries/{delivery_id}/replay",
@@ -566,9 +572,21 @@ class Billing(_Resource):
         """Every top-up session, following next_cursor."""
         return apaginate(self.list_topup_sessions, {"limit": limit})
 
-    async def get_topup_session(self, topup_session_id: str) -> m.TopupSession:
-        """Read a top-up session. Scope: billing:read."""
-        return await self._h.request("GET", f"/v1/topup-sessions/{topup_session_id}", model=m.TopupSession)
+    async def get_topup_session(
+        self, topup_session_id: str, *, check_checkout: bool = False
+    ) -> m.TopupSession:
+        """Read a top-up session. Scope: billing:read.
+
+        ``check_checkout=True`` also asks Stripe about the hosted Checkout of an open top-up. Its state
+        is in ``checkout_status``: ``open``, ``complete``, ``processing`` or ``expired``. ``complete``
+        means the person paid, and the wallet is credited when Stripe's event arrives. ``processing``
+        means they paid with a method that confirms later, such as a bank debit. ``checkout_status``
+        is ``None`` when not asked, for a top-up that is not open, or when Stripe could not be read.
+        The read changes nothing. The default, ``False``, sends no query parameter."""
+        params = {"check_checkout": True} if check_checkout else None
+        return await self._h.request(
+            "GET", f"/v1/topup-sessions/{topup_session_id}", model=m.TopupSession, params=params
+        )
 
     async def cancel_topup_session(
         self, topup_session_id: str, *, idempotency_key: str | None = None
@@ -578,7 +596,8 @@ class Billing(_Resource):
 
         Canceling a setup payment also turns off the auto top-up that waited on it. A top-up already
         canceled or expired comes back as it is. One that was paid, declined or charged off session
-        raises ``ConflictError``, with the top-up's status in ``details["status"]``."""
+        raises ``ConflictError``, with the top-up's status in ``details["status"]``. ``details["reason"]``
+        is ``paid`` when the payment came in before the cancel."""
         return await self._h.request(
             "POST",
             f"/v1/topup-sessions/{topup_session_id}/cancel",
@@ -1623,7 +1642,11 @@ class OneTimeSends(_Resource):
         Pass the cover fields typed so far, as ``create`` takes them, and leave out the rest. ``fits``
         says whether the message fits on the one cover page, and ``lines_left`` how many more lines
         fit. When it runs over, ``fits_chars`` is how much of its start fits. ``create`` refuses a
-        cover that does not fit."""
+        cover that does not fit.
+
+        ``to_name``, ``subject`` and ``message`` have the limits of ``create``: 120, 200 and 2,000
+        characters, not counting spaces at either end. A longer one raises ``InvalidRequestError``,
+        as ``create`` does."""
         body = m.OneTimeCoverCheck(
             sender_name=sender_name, email=email, to=to, to_name=to_name, subject=subject, message=message
         )

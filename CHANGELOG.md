@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.0 (2026-11-15)
+
+Follows API 1.20.10. The saved spec has 163 operations and the models are regenerated from it.
+Every operation has a method on both clients.
+
+New parameter: `billing.get_topup_session(topup_session_id, check_checkout=True)` asks Stripe about the hosted Checkout of an open top-up.
+The new field `TopupSession.checkout_status` reads `open`, `complete`, `processing` or `expired`, and `None` when not asked.
+`complete` means the person paid, and the wallet is credited when Stripe's event arrives. `processing` is a payment that confirms later, such as a bank debit.
+The default is `False`, and the request is then the same as in 0.8.0.
+
+New field: `Delivery.webhook_deleted`, which only `DeliveryDetail` had. The API sends it on every delivery.
+It is optional on `Delivery`, so a payload without it still parses.
+`webhooks.replay_delivery` on a delivery whose webhook was deleted raises `ConflictError` with `details["reason"]` set to `webhook_deleted`.
+Deleting a webhook ends the deliveries that were waiting for it. They read `failed`, with no next attempt.
+
+`OneTimeCoverCheck` describes the limits of `create`: `to_name` 120 characters, `subject` 200 and `message` 2,000.
+`one_time_sends.check_cover` says a longer field raises `InvalidRequestError`, as `create` does.
+`billing.cancel_topup_session` says `details["reason"]` is `paid` when the payment came in before the cancel.
+New descriptions on the counters of `PolicyUsage` and on `policy_name` and `version` of `PolicyVerdict` and `PolicyEvaluation`.
+
+Nothing is removed. Other model names, fields and optionality are kept.
+
 ## 0.8.0 (2026-11-15)
 
 Follows API 1.20.9. The saved spec has 163 operations and the models are regenerated from it.
