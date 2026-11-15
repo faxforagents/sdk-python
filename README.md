@@ -315,7 +315,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.10 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.20.11 and keeps the schemas of the earlier live documents.
 The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
 0.8.0 replaced five fields it had declared itself with the public ones, such as `Quote.policy_evaluation`.
