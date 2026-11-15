@@ -490,8 +490,9 @@ class Billing(_Resource):
         """The wallet statement, newest first: one line per event with the balance after it.
         Scope: billing:read.
 
-        ``kind`` keeps one kind of line, such as ``topup``, ``fax`` or ``refund``. ``from_`` and ``to``
-        are UTC days, YYYY-MM-DD, both included. ``list_ledger`` stays the double-entry record."""
+        ``kind`` keeps one kind of line: topup, fax, received_fax, number, extraction, release, refund,
+        dispute, credit, adjustment or other. ``from_`` and ``to`` are UTC days, YYYY-MM-DD, both
+        included. ``list_ledger`` stays the double-entry record."""
         params = {"kind": kind, "from": from_, "to": to, "cursor": cursor, "limit": limit}
         return await self._h.request("GET", "/v1/statement", model=m.StatementPage, params=params)
 
