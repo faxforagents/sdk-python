@@ -1778,8 +1778,8 @@ class OneTimeSends(_Resource):
     ) -> m.OneTimeCheckout:
         """Open the hosted card payment and return its ``checkout_url``. Scope with a key: fax:send.
 
-        The card is authorized on that page and charged only when the carrier confirms delivery. A
-        second call answers the same page while it can still be paid.
+        The card is held on that page and charged only for the pages the carrier confirms. The rest of
+        the hold is released. A second call answers the same page while it can still be paid.
 
         An order whose ``aup_accepted`` is false needs ``accept_aup=True`` once: the person who pays
         accepts the acceptable use policy and the terms. The server takes it with ``order_token`` or a
