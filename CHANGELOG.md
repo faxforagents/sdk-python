@@ -2,7 +2,7 @@
 
 ## 0.8.0 (2026-11-15)
 
-Follows API 1.20.8. The saved spec has 163 operations and the models are regenerated from it.
+Follows API 1.20.9. The saved spec has 163 operations and the models are regenerated from it.
 Every operation has a method on both clients.
 
 New: `billing.cancel_topup_session(topup_session_id)` closes the hosted Checkout of an open top-up and returns it with status `canceled`.
@@ -23,6 +23,7 @@ Changed: five fields that the saved spec declared itself now follow the public d
 `PaymentReceipt.pdf_url` is `None` for an automatic top-up, which has no invoice. Its `url` still opens the receipt.
 A statement line of a hold or a release names what it was for in `ref_type`: `fax_job`, `extraction` or `number_order`.
 The card of a one-time order is held, not authorized, in the docstrings and the model descriptions.
+`one_time_sends.checkout` states the payment rule of API 1.20.9. A failed fax costs nothing, and a fax that stops part way costs the price of the pages the carrier confirms.
 New models `OneTimeCoverCheck`, `OneTimeCoverRoom`, `PolicyVerdict` and `PolicyUsage`. Other model names, fields and optionality are kept.
 
 ## 0.7.0 (2026-11-15)

@@ -219,8 +219,8 @@ with Client(keyless=True) as ffa:                 # no API key: only one_time_se
 ```
 
 `order.next` names the step that is waiting: `checkout`, `confirm`, `wait` or `done`. `wait` polls until
-`done`, or until the step you pass as `until`. The card is held at checkout and charged only for the
-pages the carrier confirms.
+`done`, or until the step you pass as `until`. The card is held at checkout. A failed fax costs nothing,
+and a fax that stops part way costs the price of the pages the carrier confirms.
 
 The status token goes in the `X-FFA-Order-Token` header. It reads the order, opens its checkout, mails
 the confirmation again and downloads the receipt. A client with a live key of the order's organization
@@ -312,7 +312,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.8 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.20.9 and keeps the schemas of the earlier live documents.
 The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
 0.8.0 replaced five fields it had declared itself with the public ones, such as `Quote.policy_evaluation`.
