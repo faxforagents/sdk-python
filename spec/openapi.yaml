@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.6.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.9.
 # All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.20.6
+  version: 1.20.9
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -202,8 +202,9 @@ paths:
       tags:
       - identity
       summary: Rotate an API key and preserve its expiry
-      description: The replacement keeps the original expires_at, including no expiry. The old secret works for
-        up to 24 hours, capped by its existing expiry.
+      description: 'The replacement keeps the original expires_at, including no expiry. The old secret works for
+        up to 24 hours, capped by its existing expiry. Once a key expired, rotation answers 409: create a new one
+        to replace it.'
       operationId: rotate_api_key
       parameters:
       - name: key_id
@@ -235,7 +236,13 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: 'The key expired, so it cannot be rotated (conflict, with details.reason key_expired and
+            details.expires_at). Create a new key to replace it. Also idempotency_key_conflict: the Idempotency-Key
+            was used with a different body.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '410':
           $ref: '#/components/responses/Gone'
         '422':
@@ -2255,7 +2262,10 @@ paths:
       tags:
       - billing
       summary: 'The wallet statement: one line per event with the balance after it, newest first'
-      description: The customer's reading of the wallet. ``GET /v1/ledger`` stays the double-entry record.
+      description: 'One line per event on the wallet, signed the way the balance moved. type filters the lines by
+        the type they carry. kind is the same filter by its older name, and both at once answer 422 unless they
+        agree. A hold and its release name what they were for in ref_type: fax_job, extraction or number_order.
+        GET /v1/ledger keeps the reference as it was booked, fax_job for every hold.'
       operationId: get_statement
       parameters:
       - name: cursor
@@ -2276,6 +2286,19 @@ paths:
           minimum: 1
           default: 50
           title: Limit
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(topup|fax|received_fax|number|extraction|release|refund|dispute|credit|adjustment|other)$
+          - type: 'null'
+          description: 'Only the lines whose type is this one: topup, fax, received_fax, number, extraction, release,
+            refund, dispute, credit, adjustment, other.'
+          title: Type
+        description: 'Only the lines whose type is this one: topup, fax, received_fax, number, extraction, release,
+          refund, dispute, credit, adjustment, other.'
       - name: kind
         in: query
         required: false
@@ -2284,11 +2307,11 @@ paths:
           - type: string
             pattern: ^(topup|fax|received_fax|number|extraction|release|refund|dispute|credit|adjustment|other)$
           - type: 'null'
-          description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
-            credit, adjustment, other.'
+          description: The same filter as type, by the name it had before 2026-11-15. Sent with type, it has to
+            name the same type.
           title: Kind
-        description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
-          credit, adjustment, other.'
+        description: The same filter as type, by the name it had before 2026-11-15. Sent with type, it has to name
+          the same type.
       - name: from
         in: query
         required: false
@@ -2346,8 +2369,26 @@ paths:
       tags:
       - billing
       summary: 'The wallet statement as CSV: every line the filters select'
+      description: 'One line per event on the wallet, signed the way the balance moved. type filters the lines by
+        the type they carry. kind is the same filter by its older name, and both at once answer 422 unless they
+        agree. A hold and its release name what they were for in ref_type: fax_job, extraction or number_order.
+        GET /v1/ledger keeps the reference as it was booked, fax_job for every hold. The file''s columns for them
+        are reference_type and reference_id.'
       operationId: get_statement_csv
       parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(topup|fax|received_fax|number|extraction|release|refund|dispute|credit|adjustment|other)$
+          - type: 'null'
+          description: 'Only the lines whose type is this one: topup, fax, received_fax, number, extraction, release,
+            refund, dispute, credit, adjustment, other.'
+          title: Type
+        description: 'Only the lines whose type is this one: topup, fax, received_fax, number, extraction, release,
+          refund, dispute, credit, adjustment, other.'
       - name: kind
         in: query
         required: false
@@ -2356,11 +2397,11 @@ paths:
           - type: string
             pattern: ^(topup|fax|received_fax|number|extraction|release|refund|dispute|credit|adjustment|other)$
           - type: 'null'
-          description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
-            credit, adjustment, other.'
+          description: The same filter as type, by the name it had before 2026-11-15. Sent with type, it has to
+            name the same type.
           title: Kind
-        description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
-          credit, adjustment, other.'
+        description: The same filter as type, by the name it had before 2026-11-15. Sent with type, it has to name
+          the same type.
       - name: from
         in: query
         required: false
@@ -2652,6 +2693,69 @@ paths:
         mutating: false
         idempotency_key: false
         agent_key_allowed: true
+  /v1/topup-sessions/{topup_session_id}/cancel:
+    post:
+      tags:
+      - billing
+      summary: Cancel an open top-up, so its hosted Checkout can no longer be paid
+      description: Closes the Checkout of a manual or setup top-up that is still open and answers the session with
+        status canceled. Canceling a setup payment also turns off the auto top-up that waited on it. A top-up already
+        canceled or expired is answered as it is. One that was paid, declined or charged off session answers 409.
+      operationId: cancel_topup_session
+      parameters:
+      - name: topup_session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Topup Session Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopupSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 'The top-up has no open Checkout to cancel: it was paid, declined or charged off session
+            (conflict, with details.status). details.reason is paid when it was paid before the cancel. Also idempotency_key_conflict:
+            the Idempotency-Key was used with a different body.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: billing:write
+      x-llm:
+        scope: billing:write
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
   /v1/topup-sessions/{topup_session_id}/receipt:
     get:
       tags:
@@ -7661,8 +7765,9 @@ paths:
       description: 'Reads a file (or text) exactly as the create would and answers its page count and its first
         page as a small picture, or the create''s own refusal: too_many_pages, encrypted_pdf, unsupported_format,
         document_too_large and the other document codes. The price of the document follows from the count and the
-        route of GET /one-time-sends/config. Nothing is stored: no order, no account, no file. No credential is
-        needed. Idempotency-Key is accepted but ignored: the call changes nothing, so a repeat reads the file again.'
+        route of GET /v1/one-time-sends/config. Nothing is stored: no order, no account, no file. No credential
+        is needed. Idempotency-Key is accepted but ignored: the call changes nothing, so a repeat reads the file
+        again.'
       operationId: preview_one_time_document
       requestBody:
         content:
@@ -7727,6 +7832,43 @@ paths:
         idempotency_key: false
         agent_key_allowed: true
         key_optional: true
+  /v1/one-time-sends/cover-checks:
+    post:
+      tags:
+      - one-time-sends
+      summary: Measure the room the cover sheet leaves for its message, before an order is made
+      description: |-
+        Lays out the cover sheet exactly as the create would, with the fields given so far, and answers whether the message fits on its one page and how many more lines fit, or how much of it fits when it runs over. The create refuses a cover that does not fit with invalid_request on cover. This call says so while the message is written. Every field may be empty. Nothing is stored and no credential is needed. Idempotency-Key is accepted but ignored: the call changes nothing.
+
+        No API key is needed.
+      operationId: create_one_time_cover_check
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OneTimeCoverCheck'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeCoverRoom'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      security: []
+      x-llm:
+        scope: none
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
   /v1/one-time-sends:
     post:
       tags:
@@ -8399,10 +8541,11 @@ paths:
       tags:
       - one-time-sends
       summary: Open the card payment of a one-time order
-      description: 'Answers the hosted payment page of the order. The card is authorized there, not charged: it
-        is charged when the carrier confirms delivery. A second call answers the same page while it can still be
-        paid, and a new one after it expired. An order whose aup_accepted is false needs {"accept_aup": true} in
-        the body once, from the status token or a session: the person who pays accepts the policy, never a key.'
+      description: 'Answers the hosted payment page of the order. The card is held there, not charged. A failed
+        fax costs nothing. A fax that stops part way is charged the price of the pages the carrier confirms, and
+        the rest of the hold is released. A second call answers the same page while it can still be paid, and a
+        new one after it expired. An order whose aup_accepted is false needs {"accept_aup": true} in the body once,
+        from the status token or a session: the person who pays accepts the policy, never a key.'
       operationId: create_one_time_checkout
       parameters:
       - name: one_time_order_id
@@ -8492,8 +8635,8 @@ paths:
         mutating: true
         idempotency_key: true
         agent_key_allowed: true
-        hint: The card is authorized on the hosted page and charged only when the carrier confirms delivery. A person
-          pays, never the agent.
+        hint: The card is held on the hosted page. A failed fax costs nothing, and a fax that stops part way costs
+          the price of the pages the carrier confirms. A person pays, never the agent.
         order_token: true
   /v1/one-time-sends/{one_time_order_id}/confirm:
     post:
@@ -9005,6 +9148,7 @@ components:
       - archived
       - keys_revoked
       title: AgentArchived
+      description: 'What archiving an agent did: it is disabled for good and out of the list, and its keys are revoked.'
     AgentCreate:
       properties:
         name:
@@ -9144,6 +9288,7 @@ components:
       - countries
       - prefixes
       title: AlreadyAllowed
+      description: A number of a draft's allowed_destinations that one of its countries or prefixes already allows.
     ApiKey:
       properties:
         id:
@@ -9399,6 +9544,8 @@ components:
       - page_count
       - state
       title: ApprovalDocument
+      description: 'The document a send request binds, as it is now: its name, its pages and whether a send can
+        use it.'
     ApprovalRequest:
       properties:
         id:
@@ -10078,6 +10225,7 @@ components:
       - deleted
       - archived
       title: BudgetRemoved
+      description: 'What removing a budget did: deleted when it never charged a hold, archived when it has history.'
     Capabilities:
       properties:
         environment:
@@ -10163,6 +10311,9 @@ components:
           additionalProperties: true
           type: object
           title: One Time
+          description: 'One fax paid by card on this server. enabled: orders are taken here. published: the price
+            card offers the product. routes: the routes sold one fax at a time, empty while not enabled. max_document_pages:
+            the most document pages one order takes. Prices are in GET /v1/one-time-sends/config.'
       additionalProperties: true
       type: object
       required:
@@ -10385,6 +10536,7 @@ components:
       required:
       - items
       title: DataRequestList
+      description: The organization's export and deletion requests, each with where it stands.
     Deleted:
       properties:
         id:
@@ -10407,6 +10559,7 @@ components:
         webhook_id:
           type: string
           title: Webhook Id
+          description: The destination the event is sent to.
         webhook_url:
           anyOf:
           - type: string
@@ -10416,45 +10569,59 @@ components:
         event_id:
           type: string
           title: Event Id
+          description: The event sent. The webhook-id header carries the same id.
         event_type:
           type: string
           title: Event Type
+          description: The event's type, such as fax.delivered.
         attempt:
           type: integer
           title: Attempt
+          description: How many attempts were made so far.
         status:
           type: string
           title: Status
+          description: 'pending: an attempt is due or waits for its time. delivered: the destination answered 2xx.
+            exhausted: every attempt of the schedule failed. failed: it stopped early, because the destination was
+            deleted or paused, or its address was refused.'
         response_status:
           anyOf:
           - type: integer
           - type: 'null'
           title: Response Status
+          description: The HTTP status of the last attempt's answer. Null before an attempt, or when none came.
         error:
           anyOf:
           - type: string
           - type: 'null'
           title: Error
+          description: Why the last attempt failed, in words. Null once delivered.
         duration_ms:
           anyOf:
           - type: integer
           - type: 'null'
           title: Duration Ms
+          description: How long the last attempt took, in milliseconds.
         replay_of:
           anyOf:
           - type: string
           - type: 'null'
           title: Replay Of
+          description: The delivery this one sends again (POST /v1/webhook-deliveries/{delivery_id}/replay). Null
+            for a first delivery.
         schedule_s:
           items:
             type: integer
           type: array
           title: Schedule S
+          description: The wait before each attempt, in seconds after the one before. The first attempt waits 0
+            seconds.
         next_attempt_at:
           anyOf:
           - type: string
           - type: 'null'
           title: Next Attempt At
+          description: When the next attempt is due. Null once the delivery has ended.
         created_at:
           type: string
           title: Created At
@@ -10463,6 +10630,7 @@ components:
           - type: string
           - type: 'null'
           title: Delivered At
+          description: When the destination answered 2xx. Null until then.
       additionalProperties: true
       type: object
       required:
@@ -10481,6 +10649,7 @@ components:
       - created_at
       - delivered_at
       title: Delivery
+      description: 'One delivery of an event to a webhook destination: its attempts so far and the last answer.'
     DeliveryDetail:
       properties:
         id:
@@ -10489,6 +10658,7 @@ components:
         webhook_id:
           type: string
           title: Webhook Id
+          description: The destination the event is sent to.
         webhook_url:
           anyOf:
           - type: string
@@ -10498,45 +10668,59 @@ components:
         event_id:
           type: string
           title: Event Id
+          description: The event sent. The webhook-id header carries the same id.
         event_type:
           type: string
           title: Event Type
+          description: The event's type, such as fax.delivered.
         attempt:
           type: integer
           title: Attempt
+          description: How many attempts were made so far.
         status:
           type: string
           title: Status
+          description: 'pending: an attempt is due or waits for its time. delivered: the destination answered 2xx.
+            exhausted: every attempt of the schedule failed. failed: it stopped early, because the destination was
+            deleted or paused, or its address was refused.'
         response_status:
           anyOf:
           - type: integer
           - type: 'null'
           title: Response Status
+          description: The HTTP status of the last attempt's answer. Null before an attempt, or when none came.
         error:
           anyOf:
           - type: string
           - type: 'null'
           title: Error
+          description: Why the last attempt failed, in words. Null once delivered.
         duration_ms:
           anyOf:
           - type: integer
           - type: 'null'
           title: Duration Ms
+          description: How long the last attempt took, in milliseconds.
         replay_of:
           anyOf:
           - type: string
           - type: 'null'
           title: Replay Of
+          description: The delivery this one sends again (POST /v1/webhook-deliveries/{delivery_id}/replay). Null
+            for a first delivery.
         schedule_s:
           items:
             type: integer
           type: array
           title: Schedule S
+          description: The wait before each attempt, in seconds after the one before. The first attempt waits 0
+            seconds.
         next_attempt_at:
           anyOf:
           - type: string
           - type: 'null'
           title: Next Attempt At
+          description: When the next attempt is due. Null once the delivery has ended.
         created_at:
           type: string
           title: Created At
@@ -10545,6 +10729,7 @@ components:
           - type: string
           - type: 'null'
           title: Delivered At
+          description: When the destination answered 2xx. Null until then.
         webhook_deleted:
           type: boolean
           title: Webhook Deleted
@@ -10583,6 +10768,7 @@ components:
       - request_headers
       - payload
       title: DeliveryDetail
+      description: One delivery with the headers and the body that every attempt sends.
     DeliveryPage:
       properties:
         items:
@@ -10649,10 +10835,14 @@ components:
           - type: string
           - type: 'null'
           title: Converted From
+          description: The name of the image this PDF was converted from, as the person gave it. filename is the
+            PDF's own name. Null for a document that was not an image.
         received:
           anyOf:
           - $ref: '#/components/schemas/DocumentReceived'
           - type: 'null'
+          description: Set in the list (GET /v1/documents) on the file of a received fax, source inbound. It names
+            the inbox item, the sender as the sending machine gave it, and the time. Null everywhere else.
         upload_id:
           anyOf:
           - type: string
@@ -10769,6 +10959,7 @@ components:
           - type: integer
           - type: 'null'
           title: Total
+          description: How many documents the filters match in all, across every page.
       additionalProperties: true
       type: object
       required:
@@ -10837,6 +11028,7 @@ components:
       required:
       - filename
       title: DocumentUpdate
+      description: A new file name for a document.
     DocumentValidation:
       properties:
         id:
@@ -10929,6 +11121,9 @@ components:
         retryable:
           type: boolean
           title: Retryable
+          description: 'True when the failure passes on its own: the same call, sent again unchanged after a short
+            wait, is expected to work. False when the same call gets the same answer until the request or the resource
+            changes.'
         correlation_id:
           anyOf:
           - type: string
@@ -11484,6 +11679,21 @@ components:
           - type: string
           - type: 'null'
           title: Client Reference
+        approval_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approval Id
+          description: 'The approval request a person approved for this send. Null when another path authorized
+            it: a delegated policy (policy_version_id), a test key no policy binds, or the payer''s confirmation
+            of a one-time order.'
+        policy_version_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Policy Version Id
+          description: The version of the delegated policy that allowed this send. A version never changes, so it
+            shows the limits the send was allowed under. Null when no policy decided the send.
         attempt_count:
           type: integer
           title: Attempt Count
@@ -11520,18 +11730,12 @@ components:
           anyOf:
           - $ref: '#/components/schemas/OneTimeJob'
           - type: 'null'
-        approval_id:
-          type:
-          - string
-          - 'null'
-          description: Returned by GET /v1/faxes/{fax_id}. Declared here until the public schema includes it.
-          x-sdk-route: GET /v1/faxes/{fax_id}
-        policy_version_id:
-          type:
-          - string
-          - 'null'
-          description: Returned by GET /v1/faxes/{fax_id}. Declared here until the public schema includes it.
-          x-sdk-route: GET /v1/faxes/{fax_id}
+        route_paused:
+          type: boolean
+          title: Route Paused
+          description: An operator has paused sends on this fax's route while the fax waits for a line (queued or
+            between tries). It goes out when the route is resumed. Read when the fax is read, not stored.
+          default: false
       additionalProperties: true
       type: object
       required:
@@ -11586,6 +11790,8 @@ components:
         provider: sandbox
         provider_ref: sbx_311dd5d5bc5dfd76
         client_reference: null
+        approval_id: null
+        policy_version_id: null
         attempt_count: 1
         created_at: '2026-11-14T19:58:38.794Z'
         updated_at: '2026-11-14T19:58:38.910Z'
@@ -11603,6 +11809,7 @@ components:
           remote_station_id: SBX-OK
         one_time_order_id: null
         one_time: null
+        route_paused: false
     FaxJobPage:
       properties:
         items:
@@ -11732,6 +11939,7 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
+          description: What the received pages were charged, in micro-USD. 0 on the sandbox.
           default: 0
         note:
           anyOf:
@@ -11768,6 +11976,8 @@ components:
           - type: string
           - type: 'null'
           title: File Deleted At
+          description: When the file of this fax was deleted. media_status is then deleted and there is no download.
+            Null while the file is kept.
         duration_secs:
           anyOf:
           - type: integer
@@ -11827,6 +12037,7 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
+          description: What the received pages were charged, in micro-USD. 0 on the sandbox.
           default: 0
         note:
           anyOf:
@@ -11863,6 +12074,8 @@ components:
           - type: string
           - type: 'null'
           title: File Deleted At
+          description: When the file of this fax was deleted. media_status is then deleted and there is no download.
+            Null while the file is kept.
         duration_secs:
           anyOf:
           - type: integer
@@ -11966,6 +12179,7 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
+          description: What the received pages were charged, in micro-USD. 0 on the sandbox.
           default: 0
         note:
           anyOf:
@@ -12055,6 +12269,7 @@ components:
         unread:
           type: integer
           title: Unread
+          description: The faxes nobody has opened yet in this environment, whatever the filters.
           default: 0
       additionalProperties: true
       type: object
@@ -12254,6 +12469,7 @@ components:
       - url
       - expires_at
       title: InvitationLink
+      description: A new link for an open invitation, shown once, which replaces the old link.
     InvitationList:
       properties:
         items:
@@ -12827,8 +13043,9 @@ components:
       title: OneTimeAttempts
       description: |-
         The tries of an order's fax while it is still going out. A busy line or one that does not answer
-        is dialed again (``max`` tries in all, about ``retry_delay_seconds`` apart). ``last_failure_code`` is
-        why the last finished try did not get through, null when no try has ended.
+        is dialed again, up to ``max`` tries in all, about ``retry_delay_seconds`` apart. The field
+        ``last_failure_code`` says why the last finished try did not get through. It is null when no try has
+        ended.
     OneTimeCard:
       properties:
         last4:
@@ -12943,9 +13160,10 @@ components:
       - terms_url
       title: OneTimeConfig
       description: |-
-        What the public send page and an agent read before an order: whether the product is open here, the
-        card the order will be priced from (present only while open), the document limits and the policy the
-        sender accepts. Prices are integer micro-USD; the dollar figure is the client's to format.
+        What the public send page and an agent read before an order. It says whether the product is open
+        here, and while it is open it gives the card the order will be priced from. It also gives the document
+        limits and the policy the sender accepts. Prices are integer micro-USD, and the client formats the
+        dollar figure.
     OneTimeConfirm:
       properties:
         token:
@@ -13049,6 +13267,87 @@ components:
       description: |-
         ``signed_in`` says whether this browser now holds a session for the payer; ``me`` is then the same
         object ``GET /v1/auth/me`` answers (the CSRF token included).
+    OneTimeCoverCheck:
+      properties:
+        sender_name:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Sender Name
+          description: Printed in the From line.
+        email:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Email
+          description: Printed in the From line.
+        to:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: To
+          description: The destination, when one is typed.
+        to_name:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: To Name
+        subject:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Subject
+        message:
+          anyOf:
+          - type: string
+            maxLength: 8000
+          - type: 'null'
+          title: Message
+      additionalProperties: false
+      type: object
+      title: OneTimeCoverCheck
+      description: |-
+        The fields a one-time order prints on its cover sheet, as a form holds them before the order exists.
+        Every field may be empty. The limits of the create apply (cover.to_name 120 characters, cover.subject
+        200, cover.message 2,000).
+    OneTimeCoverRoom:
+      properties:
+        fits:
+          type: boolean
+          title: Fits
+          description: The cover with this message fits on its one page.
+        message_chars:
+          type: integer
+          title: Message Chars
+          description: The length of the message as it will be printed.
+        lines_left:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Lines Left
+          description: How many more lines of message text fit on the page. Null when the message is empty, since
+            the first line also brings its heading, and when it does not fit.
+        fits_chars:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Fits Chars
+          description: 'When the message runs over: how much of its start fits with the same line breaks. Null when
+            it fits, and when the page is full without any message.'
+      additionalProperties: true
+      type: object
+      required:
+      - fits
+      - message_chars
+      title: OneTimeCoverRoom
+      description: |-
+        How the message sits on the one cover page, measured as the create measures it. Nothing is stored
+        and no order is made.
     OneTimeFromQuote:
       properties:
         quote_id:
@@ -13123,8 +13422,9 @@ components:
       - thumbnail_png_base64
       title: OneTimeInspection
       description: |-
-        What a file would be as a one-time order's document: its page count, and its first page as a small
-        PNG (base64, null when this server cannot draw one). Nothing is stored and no order is made.
+        What a file would be as a one-time order's document: its page count and its first page as a small
+        PNG. The PNG is base64, or null when this server cannot draw one. Nothing is stored and no order is
+        made.
     OneTimeJob:
       properties:
         order_id:
@@ -13217,7 +13517,7 @@ components:
       required:
       - order_id
       title: OneTimeJob
-      description: 'The order behind a fax job that a one-time send made: what was authorized, what was charged.'
+      description: 'The order behind a fax job that a one-time send made: what was held on the card, what was charged.'
     OneTimeOrder:
       properties:
         id:
@@ -13301,9 +13601,9 @@ components:
         document_deleted:
           type: boolean
           title: Document Deleted
-          description: 'True once no copy of the document is held: it was deleted after the send, by the retention
-            period or by its owner, or the order ended before it was released and the uploaded file was removed.
-            The order, the fax and the carrier evidence stay; they hold no document content.'
+          description: True once no copy of the document is held. It was deleted after the send, by the retention
+            period or by its owner. Or the order ended before its release and the uploaded file was removed. The
+            order, the fax and the carrier evidence stay, and they hold no document content.
           default: false
         document_expires_at:
           anyOf:
@@ -13430,8 +13730,8 @@ components:
           anyOf:
           - $ref: '#/components/schemas/OneTimeAttempts'
           - type: 'null'
-          description: 'The tries of the order''s fax while it has not ended: how many were made, of how many, and
-            why the last one did not get through. Null before the fax exists and once it ended.'
+          description: The tries of the order's fax while it has not ended. It says how many were made, of how many,
+            and why the last one did not get through. Null before the fax exists and once it ended.
         preview:
           anyOf:
           - $ref: '#/components/schemas/OneTimePreview'
@@ -13481,10 +13781,10 @@ components:
       - updated_at
       title: OneTimeOrder
       description: |-
-        One order of the one-time send. ``next`` is what the caller does now: ``checkout`` (open the
-        payment), ``confirm`` (the payer clicks the link in the mail), ``wait`` (nothing to do; read again) or
-        ``done``. Money is integer micro-USD. ``captured_micro`` is what the card was charged, written only
-        once the payment provider confirmed it. ``fax`` is the fax job once the order was released, with the
+        One order of the one-time send. The field ``next`` is what the caller does now: ``checkout`` (pay),
+        ``confirm`` (click the mailed link), ``wait`` (read again later) or ``done``. Money is integer
+        micro-USD. The field ``captured_micro`` is what the card was charged, written only once the payment
+        provider confirmed it. The field ``fax`` is the fax job once the order was released, with the
         carrier's evidence once it has any.
     OneTimeOrderCreated:
       properties:
@@ -13569,9 +13869,9 @@ components:
         document_deleted:
           type: boolean
           title: Document Deleted
-          description: 'True once no copy of the document is held: it was deleted after the send, by the retention
-            period or by its owner, or the order ended before it was released and the uploaded file was removed.
-            The order, the fax and the carrier evidence stay; they hold no document content.'
+          description: True once no copy of the document is held. It was deleted after the send, by the retention
+            period or by its owner. Or the order ended before its release and the uploaded file was removed. The
+            order, the fax and the carrier evidence stay, and they hold no document content.
           default: false
         document_expires_at:
           anyOf:
@@ -13694,8 +13994,8 @@ components:
           anyOf:
           - $ref: '#/components/schemas/OneTimeAttempts'
           - type: 'null'
-          description: 'The tries of the order''s fax while it has not ended: how many were made, of how many, and
-            why the last one did not get through. Null before the fax exists and once it ended.'
+          description: The tries of the order's fax while it has not ended. It says how many were made, of how many,
+            and why the last one did not get through. Null before the fax exists and once it ended.
         preview:
           anyOf:
           - $ref: '#/components/schemas/OneTimePreview'
@@ -13855,9 +14155,10 @@ components:
       - estimated_wait_minutes
       title: OneTimeQueue
       description: |-
-        The wait for a carrier line. ``queued`` is true when a fax sent now, or this order's waiting fax,
-        is estimated to wait more than ten minutes for a line: the order is kept and sent in turn, never
-        dropped. The minutes are an estimate from the number of faxes ahead and the carrier's line count.
+        The wait for a carrier line. The field ``queued`` is true when a fax sent now, or this order's
+        waiting fax, is estimated to wait over ten minutes for a line. The order is kept and sent in turn,
+        never dropped. The minutes are an estimate from the number of faxes ahead and the carrier's line
+        count.
     OneTimeRoute:
       properties:
         label:
@@ -14008,7 +14309,9 @@ components:
           - type: string
           - type: 'null'
           title: Pdf Url
-          description: The same receipt as a PDF.
+          description: 'The same receipt as a PDF, where Stripe has one: the receipt of a paid invoice, which a
+            top-up paid in Checkout has. Null for a charge without an invoice, such as an automatic top-up: its
+            receipt is the page at url.'
         amount_micro:
           type: integer
           title: Amount Micro
@@ -14137,25 +14440,33 @@ components:
       properties:
         decision:
           type: string
+          enum:
+          - allow
+          - deny
           title: Decision
         rule:
           anyOf:
           - type: string
           - type: 'null'
           title: Rule
+          description: The rule that failed first when a policy denied the plan. Null on allow, and when no policy
+            binds the caller.
         reason:
           type: string
           title: Reason
+          description: Why, in one sentence.
         policy_id:
           anyOf:
           - type: string
           - type: 'null'
           title: Policy Id
+          description: The policy that allowed the plan, or the first one that denied it. Null when none binds.
         policy_version_id:
           anyOf:
           - type: string
           - type: 'null'
           title: Policy Version Id
+          description: The version of that policy that decided.
         policy_name:
           anyOf:
           - type: string
@@ -14166,12 +14477,25 @@ components:
           - type: integer
           - type: 'null'
           title: Version
+        managed:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Managed
+          description: connected_apps when the organization's auto-send setting decided, else null.
         denials:
           items:
             additionalProperties: true
             type: object
           type: array
           title: Denials
+          description: Every policy that denied the plan, each with its policy_id, policy_version_id, decision,
+            rule and reason. Empty on allow.
+        usage:
+          anyOf:
+          - $ref: '#/components/schemas/PolicyUsage'
+          - type: 'null'
+          description: 'On allow: the deciding policy''s counters for the day and the month before this send.'
         plan:
           additionalProperties: true
           type: object
@@ -14201,14 +14525,6 @@ components:
           title: Approval Required
           description: 'What a send of this plan by that caller would need: true when a person has to approve it.
             false when a policy allows it, and for a test send by a caller no policy binds.'
-        usage:
-          type:
-          - object
-          - 'null'
-          additionalProperties:
-            type: integer
-          description: Returned by POST /v1/policy-evaluations when a bound policy has usage.
-          x-sdk-route: POST /v1/policy-evaluations
       additionalProperties: true
       type: object
       required:
@@ -14222,6 +14538,9 @@ components:
       - denials
       - plan
       title: PolicyEvaluation
+      description: |-
+        A dry run: the verdict for one planned send, the plan as the server read it, and what a send of it
+        would need. Nothing is sent.
     PolicyEvaluationCreate:
       properties:
         quote_id:
@@ -14303,6 +14622,7 @@ components:
       required:
       - already_allowed
       title: PolicyRuleCheck
+      description: Which of a draft's numbers its countries or prefixes already allow.
     PolicyRuleCheckCreate:
       properties:
         allowed_destinations:
@@ -14311,21 +14631,25 @@ components:
           type: array
           maxItems: 500
           title: Allowed Destinations
+          description: The draft's exact E.164 numbers.
         allowed_countries:
           items:
             type: string
           type: array
           maxItems: 300
           title: Allowed Countries
+          description: The draft's ISO 3166-1 alpha-2 country codes, such as US or GB.
         allowed_country_prefixes:
           items:
             type: string
           type: array
           maxItems: 300
           title: Allowed Country Prefixes
+          description: The draft's dialing prefixes, written as the rate card routes on them, such as +44.
       additionalProperties: false
       type: object
       title: PolicyRuleCheckCreate
+      description: The three destination lists of a draft policy, to check against each other.
     PolicyUpdate:
       properties:
         name:
@@ -14355,6 +14679,104 @@ components:
       additionalProperties: false
       type: object
       title: PolicyUpdate
+    PolicyUsage:
+      properties:
+        day_jobs:
+          type: integer
+          title: Day Jobs
+        day_amount_micro:
+          type: integer
+          title: Day Amount Micro
+        month_jobs:
+          type: integer
+          title: Month Jobs
+        month_amount_micro:
+          type: integer
+          title: Month Amount Micro
+      additionalProperties: true
+      type: object
+      required:
+      - day_jobs
+      - day_amount_micro
+      - month_jobs
+      - month_amount_micro
+      title: PolicyUsage
+      description: What the deciding policy had counted before the send it was asked about, in UTC periods.
+    PolicyVerdict:
+      properties:
+        decision:
+          type: string
+          enum:
+          - allow
+          - deny
+          title: Decision
+        rule:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule
+          description: The rule that failed first when a policy denied the plan. Null on allow, and when no policy
+            binds the caller.
+        reason:
+          type: string
+          title: Reason
+          description: Why, in one sentence.
+        policy_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Policy Id
+          description: The policy that allowed the plan, or the first one that denied it. Null when none binds.
+        policy_version_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Policy Version Id
+          description: The version of that policy that decided.
+        policy_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Policy Name
+        version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Version
+        managed:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Managed
+          description: connected_apps when the organization's auto-send setting decided, else null.
+        denials:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Denials
+          description: Every policy that denied the plan, each with its policy_id, policy_version_id, decision,
+            rule and reason. Empty on allow.
+        usage:
+          anyOf:
+          - $ref: '#/components/schemas/PolicyUsage'
+          - type: 'null'
+          description: 'On allow: the deciding policy''s counters for the day and the month before this send.'
+      additionalProperties: true
+      type: object
+      required:
+      - decision
+      - rule
+      - reason
+      - policy_id
+      - policy_version_id
+      - policy_name
+      - version
+      - denials
+      title: PolicyVerdict
+      description: |-
+        One evaluation of the delegated policies that bind a caller: the first policy that allows the plan,
+        or every policy that denies it.
     PolicyVersion:
       properties:
         id:
@@ -14616,6 +15038,16 @@ components:
           type: integer
           title: Per Page Micro
           default: 0
+        pricing:
+          type: string
+          enum:
+          - per_page
+          - one_time
+          title: Pricing
+          description: 'per_page: priced from the rate card, paid from the wallet and sent with POST /v1/faxes.
+            one_time: the quote of a one-time order, priced at the card''s price for the order. Only the order sends
+            it, and POST /v1/faxes refuses it with quote_pricing_mismatch.'
+          default: per_page
         route_label:
           type: string
           title: Route Label
@@ -14642,6 +15074,12 @@ components:
         authorization_required:
           type: boolean
           title: Authorization Required
+        policy_evaluation:
+          anyOf:
+          - $ref: '#/components/schemas/PolicyVerdict'
+          - type: 'null'
+          description: The dry run of the delegated policies that bind the caller, made with the quote. Null when
+            no policy binds the caller. The send evaluates the policies again, with their counters locked.
         route_paused:
           type: boolean
           title: Route Paused
@@ -14668,18 +15106,6 @@ components:
         created_at:
           type: string
           title: Created At
-        pricing:
-          type: string
-          description: Returned by POST /v1/fax-quotes. Declared here until the public schema includes it.
-          x-sdk-route: POST /v1/fax-quotes
-        policy_evaluation:
-          type:
-          - object
-          - 'null'
-          description: Returned by GET /v1/fax-quotes/{quote_id}. Declared here until the public schema includes
-            it.
-          x-sdk-route: GET /v1/fax-quotes/{quote_id}
-          additionalProperties: true
       additionalProperties: true
       type: object
       required:
@@ -14718,12 +15144,14 @@ components:
         currency: USD
         price_version: launch-v3
         per_page_micro: 0
+        pricing: per_page
         route_label: United States and Canada
         cover: null
         quality: fine
         sender_name: null
         delete_after_send: false
         authorization_required: false
+        policy_evaluation: null
         route_paused: false
         warnings:
         - code: sandbox
@@ -14893,9 +15321,9 @@ components:
           - $ref: '#/components/schemas/OneTimeJob'
           - type: 'null'
           description: Set on the receipt of a fax that a one-time order paid for. It names the order, its status,
-            the card and the amount the card was authorized for. captured_micro in it is the amount charged, written
-            once the payment provider confirmed the capture. For a card order read the money here. Null for a fax
-            paid from the wallet.
+            the card and the amount held on the card. captured_micro in it is the amount charged, written once the
+            payment provider confirmed the capture. For a card order read the money here. Null for a fax paid from
+            the wallet.
       additionalProperties: true
       type: object
       required:
@@ -15327,6 +15755,7 @@ components:
           - adjustment
           - other
           title: Type
+          description: What the line is, in one word. The type filter of the statement takes these values.
         description:
           type: string
           title: Description
@@ -15344,11 +15773,16 @@ components:
           - type: string
           - type: 'null'
           title: Ref Type
+          description: 'What ref_id is. A hold or its release names what it was for: fax_job, extraction or number_order.
+            Other lines name what they were booked against, such as stripe_payment_intent for a top-up or inbox_item
+            for a received fax.'
         ref_id:
           anyOf:
           - type: string
           - type: 'null'
           title: Ref Id
+          description: The id of that object, such as fax_..., ext_..., nord_... or inb_..., or the payment's id
+            at the card processor. Null when the line names none.
       additionalProperties: true
       type: object
       required:
@@ -15361,6 +15795,7 @@ components:
       - ref_type
       - ref_id
       title: StatementLine
+      description: One event on the wallet, signed the way the balance moved, with the balance after it.
     StatementPage:
       properties:
         items:
@@ -15378,6 +15813,7 @@ components:
       required:
       - items
       title: StatementPage
+      description: A page of the wallet statement, newest line first.
     Subscription:
       properties:
         id:

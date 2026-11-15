@@ -21,7 +21,7 @@ from faxforagents import (
     ScopeError,
     ServerError,
 )
-from tests.conftest import BASE, KEY, api_key_with_secret, document, error, fax_job, quote
+from tests.conftest import BASE, KEY, api_key_with_secret, document, error, fax_job, quote, topup_session
 
 
 def test_bearer_header_and_user_agent(client: Client, api: respx.MockRouter) -> None:
@@ -957,3 +957,116 @@ def test_used_approvals_and_closing_a_help_request(client: Client, api: respx.Mo
     assert json.loads(reject.calls.last.request.content) == {}
     client.approvals.reject("apr_1", reason="wrong number")
     assert json.loads(reject.calls.last.request.content) == {"reason": "wrong number"}
+
+
+def test_cancel_an_open_topup(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.8: the hosted Checkout of an open top-up closes, and the session reads canceled."""
+    tid = topup_session()["id"]
+    route = api.post(f"/v1/topup-sessions/{tid}/cancel")
+    route.side_effect = [
+        httpx.Response(200, json=topup_session(status="canceled")),
+        httpx.Response(
+            409,
+            json=error(
+                "conflict", "this top-up has no open Checkout to cancel", details={"status": "completed"}
+            ),
+        ),
+    ]
+    canceled = client.billing.cancel_topup_session(tid, idempotency_key="k-cancel")
+    assert canceled.status == "canceled" and canceled.id == tid
+    sent = route.calls.last.request
+    assert sent.headers["idempotency-key"] == "k-cancel" and sent.content == b""
+    with pytest.raises(ConflictError) as exc:
+        client.billing.cancel_topup_session(tid)
+    assert exc.value.code == "conflict" and exc.value.details == {"status": "completed"}
+    assert len(route.calls) == 2
+
+
+def test_the_statement_filters_by_type_and_kind_still_works(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.8: type is the filter, kind is its older name, and two different types answer 422."""
+    hold = statement_line(id="led_3", type="release", ref_type="extraction", ref_id="ext_1")
+    route = api.get("/v1/statement")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [statement_line(type="refund")], "next_cursor": None}),
+        httpx.Response(200, json={"items": [hold], "next_cursor": None}),
+        httpx.Response(200, json={"items": [], "next_cursor": None}),
+        httpx.Response(
+            422,
+            json=error(
+                "invalid_request",
+                "type and kind are one filter: send one of them, or the same type in both",
+                details={"fields": ["type", "kind"]},
+            ),
+        ),
+    ]
+    assert client.billing.statement(type="refund").items[0].type == "refund"
+    assert dict(route.calls[0].request.url.params) == {"type": "refund"}
+    released = list(client.billing.iter_statement(type="release", limit=5))
+    assert released[0].ref_type == "extraction" and released[0].ref_id == "ext_1"
+    assert dict(route.calls[1].request.url.params) == {"type": "release", "limit": "5"}
+    assert client.billing.statement(kind="fax").items == []
+    assert dict(route.calls[2].request.url.params) == {"kind": "fax"}
+    with pytest.raises(InvalidRequestError) as exc:
+        client.billing.statement(type="fax", kind="topup")
+    assert exc.value.details == {"fields": ["type", "kind"]}
+    assert dict(route.calls[3].request.url.params) == {"type": "fax", "kind": "topup"}
+    csv = api.get("/v1/statement.csv").respond(
+        200, content=b"date,type\n", headers={"content-type": "text/csv"}
+    )
+    assert client.billing.statement_csv(type="refund", from_="2026-11-01") == "date,type\n"
+    assert dict(csv.calls.last.request.url.params) == {"type": "refund", "from": "2026-11-01"}
+
+
+def test_an_expired_key_is_not_rotated(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.8: the replacement would keep the past expiry, so the rotation answers 409."""
+    details = {"reason": "key_expired", "expires_at": "2026-11-01T00:00:00Z"}
+    route = api.post("/v1/api-keys/key_1/rotate").respond(
+        409, json=error("conflict", "this key expired, so it cannot be rotated", details=details)
+    )
+    with pytest.raises(ConflictError) as exc:
+        client.identity.rotate_api_key("key_1")
+    assert exc.value.status == 409 and exc.value.details == details
+    assert len(route.calls) == 1
+
+
+def test_the_quote_and_the_job_name_their_policy(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.8: a quote carries its pricing and the policy dry run, a job what authorized it."""
+    usage = {"day_jobs": 3, "day_amount_micro": 117_000, "month_jobs": 40, "month_amount_micro": 1_560_000}
+    verdict = {**evaluation(version=2), "managed": None, "usage": usage}
+    verdict.pop("plan")
+    route = api.post("/v1/fax-quotes")
+    route.side_effect = [
+        httpx.Response(201, json=quote(pricing="one_time", policy_evaluation=verdict)),
+        httpx.Response(201, json=quote()),
+    ]
+    priced = client.quotes.create(document_id="doc_" + "2" * 32, to="+15550000001")
+    assert priced.pricing == "one_time" and priced.policy_evaluation is not None
+    assert priced.policy_evaluation.decision == "allow" and priced.policy_evaluation.version == 2
+    assert priced.policy_evaluation.usage is not None and priced.policy_evaluation.usage.day_jobs == 3
+    older = client.quotes.create(document_id="doc_" + "2" * 32, to="+15550000001")
+    assert older.pricing == "per_page" and older.policy_evaluation is None
+    job_id = fax_job()["id"]
+    get = api.get(f"/v1/faxes/{job_id}")
+    get.side_effect = [
+        httpx.Response(200, json=fax_job(approval_id="apr_1", policy_version_id=None, route_paused=True)),
+        httpx.Response(200, json=fax_job()),
+    ]
+    job = client.faxes.get(job_id)
+    assert job.approval_id == "apr_1" and job.policy_version_id is None and job.route_paused is True
+    plain = client.faxes.get(job_id)
+    assert plain.approval_id is None and plain.route_paused is False
+    api.post("/v1/policy-evaluations").respond(200, json=evaluation(managed="connected_apps", usage=usage))
+    result = client.policies.evaluate(to="+15550000001", document_id="doc_" + "2" * 32)
+    assert result.managed == "connected_apps" and result.usage is not None
+    assert result.usage.month_amount_micro == 1_560_000
+
+
+def test_an_automatic_topup_receipt_has_no_pdf(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.8: a charge without an invoice has a receipt page and no PDF."""
+    tid = topup_session(kind="auto")["id"]
+    api.get(f"/v1/topup-sessions/{tid}/receipt").respond(
+        200,
+        json=receipt(pdf_url=None, topup_session_id=tid, url="https://pay.example.test/receipts/payment/1"),
+    )
+    found = client.billing.get_topup_receipt(tid)
+    assert found.pdf_url is None and found.url.endswith("/receipts/payment/1")

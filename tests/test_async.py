@@ -6,7 +6,7 @@ import httpx
 import respx
 
 from faxforagents import AsyncClient
-from tests.conftest import api_key_with_secret, fax_job, quote
+from tests.conftest import api_key_with_secret, fax_job, quote, topup_session
 
 
 async def test_async_send_and_wait(aclient: AsyncClient, api: respx.MockRouter) -> None:
@@ -220,3 +220,40 @@ async def test_async_filters_and_one_time_reads(aclient: AsyncClient, api: respx
     )
     assert await aclient.one_time_sends.get_page("oto_1", 2) == b"\x89PNG"
     assert "x-ffa-order-token" not in page.calls.last.request.headers
+
+
+async def test_async_topup_cancel_statement_type_and_cover_check(
+    aclient: AsyncClient, api: respx.MockRouter
+) -> None:
+    import json
+
+    tid = topup_session()["id"]
+    cancel = api.post(f"/v1/topup-sessions/{tid}/cancel").respond(
+        200, json=topup_session(kind="setup", status="canceled")
+    )
+    assert (await aclient.billing.cancel_topup_session(tid)).status == "canceled"
+    assert len(cancel.calls.last.request.headers["idempotency-key"]) == 36
+    line = {
+        "id": "led_1",
+        "created_at": "2026-11-15T09:00:00Z",
+        "type": "adjustment",
+        "description": "Refund of the failed fax, as agreed",
+        "amount_micro": 39_000,
+        "balance_after_micro": 100_039_000,
+        "ref_type": "billing_adjustment",
+        "ref_id": "adj_1",
+    }
+    route = api.get("/v1/statement").respond(200, json={"items": [line], "next_cursor": None})
+    ids = [item.id async for item in aclient.billing.iter_statement(type="adjustment")]
+    assert ids == ["led_1"] and dict(route.calls.last.request.url.params) == {"type": "adjustment"}
+    assert (await aclient.billing.statement(kind="adjustment")).items[0].type == "adjustment"
+    assert dict(route.calls.last.request.url.params) == {"kind": "adjustment"}
+    csv = api.get("/v1/statement.csv").respond(200, content=b"date\n", headers={"content-type": "text/csv"})
+    assert await aclient.billing.statement_csv(type="adjustment") == "date\n"
+    assert dict(csv.calls.last.request.url.params) == {"type": "adjustment"}
+    cover = api.post("/v1/one-time-sends/cover-checks").respond(
+        200, json={"fits": True, "message_chars": 5, "lines_left": 30, "fits_chars": None}
+    )
+    room = await aclient.one_time_sends.check_cover(subject="Form", message="Hello")
+    assert room.fits is True and room.lines_left == 30
+    assert json.loads(cover.calls.last.request.content) == {"subject": "Form", "message": "Hello"}

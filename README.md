@@ -84,10 +84,12 @@ The same in async form, with `AsyncClient` and `await` on every call.
 - `documents.create_upload(filename=..., size_bytes=...)` needs no `content_type`. The API reads the
   type from the filename and refuses a filename of another format at once with `unsupported_format`.
 - `billing.statement()` reads the wallet one line per event, with the balance after each line.
-  `billing.statement_csv()` returns the same lines as CSV text.
+  `type=` keeps one type of line, and `kind=`, its older name, still works. `billing.statement_csv()`
+  returns the same lines as CSV text.
 - `faxes.list(q=...)` finds a fax by its number or by the start of its id. `documents.list(q=...)` finds
   a document by file name, or a received fax's file by the sender's number.
 - `one_time_sends.preview(file=...)` counts the pages of a document before any order exists, with no key.
+  `one_time_sends.check_cover(message=...)` says whether a cover message fits on its page.
 - `faxes.wait(fax_id)` and `approvals.wait(approval_id)` poll with a timeout.
 - `verify_webhook(secret, headers, body)` checks the Standard Webhooks signature on a delivery.
 - Models are pydantic v2, generated from the public OpenAPI document. Money is an integer count of
@@ -115,7 +117,7 @@ each call needs.
 | `ffa.faxes` | `create`, `list`, `iter`, `get`, `wait`, `list_events`, `list_attempts`, `get_receipt`, `get_receipt_pdf`, `cancel` |
 | `ffa.webhooks` | `list`, `create`, `update`, `delete`, `rotate_secret`, `test`, `list_deliveries`, `get_delivery`, `replay_delivery` |
 | `ffa.events` | `list`, `iter` |
-| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `statement`, `iter_statement`, `statement_csv`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `delete_budget`, `usage`, exports, invoices, `get_invoice_receipt`, `get_topup_receipt`, subscriptions, `create_portal_session` |
+| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `statement`, `iter_statement`, `statement_csv`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, `cancel_topup_session`, auto top-ups, budgets, `delete_budget`, `usage`, exports, invoices, `get_invoice_receipt`, `get_topup_receipt`, subscriptions, `create_portal_session` |
 | `ffa.platform` | `capabilities`, `service_status` |
 | `ffa.sandbox` | `list_scenarios`, `create_scenario`, `create_inbound_fax`, `reset` |
 | `ffa.approvals` | `request`, `request_help`, `list`, `iter`, `get`, `wait`, `approve`, `reject`, `revoke` |
@@ -127,7 +129,7 @@ each call needs.
 | `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `list_data_requests`, `withdraw_data_deletion`, `download_export_archive` |
 | `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `resend_invitation`, `link_invitation`, `revoke_invitation` |
 | `ffa.oauth` | `list_grants`, `iter_grants`, `revoke_grant` |
-| `ffa.one_time_sends` | `config`, `preview`, `create`, `create_from_quote`, `list`, `iter`, `get`, `get_page`, `wait`, `checkout`, `read_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
+| `ffa.one_time_sends` | `config`, `preview`, `check_cover`, `create`, `create_from_quote`, `list`, `iter`, `get`, `get_page`, `wait`, `checkout`, `read_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
 
 `ffa.request("GET", "/v1/anything")` reaches an operation the resources do not cover yet.
 
@@ -217,8 +219,8 @@ with Client(keyless=True) as ffa:                 # no API key: only one_time_se
 ```
 
 `order.next` names the step that is waiting: `checkout`, `confirm`, `wait` or `done`. `wait` polls until
-`done`, or until the step you pass as `until`. The card is authorized at checkout and charged only when
-the carrier confirms delivery.
+`done`, or until the step you pass as `until`. The card is held at checkout. A failed fax costs nothing,
+and a fax that stops part way costs the price of the pages the carrier confirms.
 
 The status token goes in the `X-FFA-Order-Token` header. It reads the order, opens its checkout, mails
 the confirmation again and downloads the receipt. A client with a live key of the order's organization
@@ -310,9 +312,10 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.6 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.20.9 and keeps the schemas of the earlier live documents.
 The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
+0.8.0 replaced five fields it had declared itself with the public ones, such as `Quote.policy_evaluation`.
 It also retains earlier public model names and route-documented response additions.
 To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.
