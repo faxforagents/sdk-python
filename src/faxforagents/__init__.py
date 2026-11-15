@@ -18,7 +18,7 @@ Documentation: https://faxforagents.com/docs. The API reference: https://faxfora
 
 from __future__ import annotations
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 from faxforagents._http import ORDER_TOKEN_HEADER
 from faxforagents.async_client import AsyncClient
