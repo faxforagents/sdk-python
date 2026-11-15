@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.5.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.6.
 # All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.20.5
+  version: 1.20.6
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -622,6 +622,51 @@ paths:
           minimum: 1
           default: 50
           title: Limit
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - upload
+            - image
+            - text
+            - markdown
+            - html
+            - inbound
+            type: string
+          - type: 'null'
+          description: Only documents of this source; "inbound" is the files of received faxes.
+          title: Source
+        description: Only documents of this source; "inbound" is the files of received faxes.
+      - name: exclude_source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - upload
+            - image
+            - text
+            - markdown
+            - html
+            - inbound
+            type: string
+          - type: 'null'
+          description: Leave this source out; "inbound" lists the documents you made.
+          title: Exclude Source
+        description: Leave this source out; "inbound" lists the documents you made.
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          description: Part of a file name, or of the sender's number for a received fax.
+          title: Q
+        description: Part of a file name, or of the sender's number for a received fax.
       responses:
         '200':
           description: Successful Response
@@ -694,6 +739,65 @@ paths:
         scope: document:read
         mutating: false
         idempotency_key: false
+        agent_key_allowed: true
+    patch:
+      tags:
+      - documents
+      summary: Rename a document
+      operationId: rename_document
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Document Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: document:write
+      x-llm:
+        scope: document:write
+        mutating: true
+        idempotency_key: true
         agent_key_allowed: true
     delete:
       tags:
@@ -1181,6 +1285,22 @@ paths:
           title: Idempotency Key
         description: Find the send job using its Idempotency-Key. This lookup requires the stored replay record.
           An empty result does not prove no fax was sent.
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 64
+          - type: 'null'
+          description: 'Find faxes by destination or by id. Text that starts with fax_ is the beginning of a job
+            id. Anything else is read as a fax number in any spelling: its digits are looked for anywhere in the
+            destination. Combines with state.'
+          title: Q
+        description: 'Find faxes by destination or by id. Text that starts with fax_ is the beginning of a job id.
+          Anything else is read as a fax number in any spelling: its digits are looked for anywhere in the destination.
+          Combines with state.'
       - name: cursor
         in: query
         required: false
@@ -1879,6 +1999,47 @@ paths:
         mutating: false
         idempotency_key: false
         agent_key_allowed: false
+  /v1/webhook-deliveries/{delivery_id}:
+    get:
+      tags:
+      - webhooks
+      summary: One delivery with the body that was sent (no secrets)
+      operationId: get_webhook_delivery
+      parameters:
+      - name: delivery_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Delivery Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: webhook:admin
+      x-llm:
+        scope: webhook:admin
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: false
   /v1/webhook-deliveries/{delivery_id}/replay:
     post:
       tags:
@@ -2064,6 +2225,169 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LedgerPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: billing:read
+      x-llm:
+        scope: billing:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+  /v1/statement:
+    get:
+      tags:
+      - billing
+      summary: 'The wallet statement: one line per event with the balance after it, newest first'
+      description: The customer's reading of the wallet. ``GET /v1/ledger`` stays the double-entry record.
+      operationId: get_statement
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(topup|fax|received_fax|number|extraction|release|refund|dispute|credit|adjustment|other)$
+          - type: 'null'
+          description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
+            credit, adjustment, other.'
+          title: Kind
+        description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
+          credit, adjustment, other.'
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: First UTC day, YYYY-MM-DD, included.
+          title: From
+        description: First UTC day, YYYY-MM-DD, included.
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Last UTC day, YYYY-MM-DD, included.
+          title: To
+        description: Last UTC day, YYYY-MM-DD, included.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: billing:read
+      x-llm:
+        scope: billing:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+  /v1/statement.csv:
+    get:
+      tags:
+      - billing
+      summary: 'The wallet statement as CSV: every line the filters select'
+      operationId: get_statement_csv
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(topup|fax|received_fax|number|extraction|release|refund|dispute|credit|adjustment|other)$
+          - type: 'null'
+          description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
+            credit, adjustment, other.'
+          title: Kind
+        description: 'One kind of line: topup, fax, received_fax, number, extraction, release, refund, dispute,
+          credit, adjustment, other.'
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: First UTC day, YYYY-MM-DD, included.
+          title: From
+        description: First UTC day, YYYY-MM-DD, included.
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Last UTC day, YYYY-MM-DD, included.
+          title: To
+        description: Last UTC day, YYYY-MM-DD, included.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/csv:
+              schema:
+                type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2524,6 +2848,16 @@ paths:
       - billing
       summary: Spending caps of this environment
       operationId: list_budgets
+      parameters:
+      - name: include_archived
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Also list removed budgets with history.
+          default: false
+          title: Include Archived
+        description: Also list removed budgets with history.
       responses:
         '200':
           description: Successful Response
@@ -2537,6 +2871,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '410':
           $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '404':
@@ -2654,6 +2990,57 @@ paths:
           $ref: '#/components/responses/Gone'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: billing:write
+      x-llm:
+        scope: billing:write
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
+    delete:
+      tags:
+      - billing
+      summary: 'Remove a cap: deleted when it never charged a hold, archived when it has history'
+      operationId: delete_budget
+      parameters:
+      - name: budget_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Budget Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetRemoved'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -3641,6 +4028,96 @@ paths:
         mutating: true
         idempotency_key: true
         agent_key_allowed: false
+  /v1/organizations/current/data-requests:
+    get:
+      tags:
+      - organizations
+      summary: The organization's export and deletion requests and where each stands
+      operationId: list_data_requests
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataRequestList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: account:read
+      x-llm:
+        scope: account:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+  /v1/organizations/current/deletion-requests/{request_id}:
+    delete:
+      tags:
+      - organizations
+      summary: Withdraw an open deletion request (owner)
+      description: Works while the request is open. Once a person at Fax for Agents has started the deletion the
+        organization answers 410 to every call, this one included.
+      operationId: withdraw_data_deletion
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: org:admin
+      x-llm:
+        scope: org:admin
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
   /v1/organization/export-archives/{token}:
     get:
       tags:
@@ -3922,6 +4399,112 @@ paths:
         mutating: true
         idempotency_key: true
         agent_key_allowed: false
+  /v1/invitations/{invitation_id}/resend:
+    post:
+      tags:
+      - members
+      summary: 'Send an open invitation again: a new link for 7 days, and the old link stops working'
+      operationId: resend_invitation
+      parameters:
+      - name: invitation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Invitation Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: member:admin
+      x-llm:
+        scope: member:admin
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
+  /v1/invitations/{invitation_id}/link:
+    post:
+      tags:
+      - members
+      summary: Make a new link for an open invitation, to hand over yourself (the old link stops working)
+      description: 'No mail is sent. The link is shown once, like a key''s secret: the server keeps only its hash.
+        It joins the organization only for a person signed in with the invited address.'
+      operationId: link_invitation
+      parameters:
+      - name: invitation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Invitation Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationLink'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: member:admin
+      x-llm:
+        scope: member:admin
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
   /v1/invitations/{invitation_id}:
     delete:
       tags:
@@ -4045,7 +4628,11 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
+          description: pending, approved, used, rejected, revoked or expired. used finds the approvals a send consumed;
+            their status reads approved and consumed_by_job_id names the fax.
           title: Status
+        description: pending, approved, used, rejected, revoked or expired. used finds the approvals a send consumed;
+          their status reads approved and consumed_by_job_id names the fax.
       - name: cursor
         in: query
         required: false
@@ -4200,7 +4787,7 @@ paths:
     post:
       tags:
       - approvals
-      summary: Reject with a reason
+      summary: Reject with a reason (a help request closes without one)
       operationId: reject_request
       parameters:
       - name: approval_id
@@ -4316,6 +4903,54 @@ paths:
         mutating: true
         idempotency_key: true
         agent_key_allowed: false
+  /v1/policy-rule-checks:
+    post:
+      tags:
+      - policies
+      summary: Check a draft's destination lists against each other. Writes nothing
+      description: 'For the editor of a policy: which numbers of allowed_destinations are already allowed by one
+        of allowed_countries or allowed_country_prefixes. Routed with the rate card, the way an evaluation routes
+        a destination. Entries that are not numbers the card serves are left out. Nothing is stored and no policy
+        is read. Idempotency-Key is accepted but ignored: a repeat checks the lists again.'
+      operationId: create_policy_rule_check
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyRuleCheckCreate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRuleCheck'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: policy:read
+      x-llm:
+        scope: policy:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
   /v1/policies:
     get:
       tags:
@@ -4728,7 +5363,7 @@ paths:
     post:
       tags:
       - policies
-      summary: 'Dry run: would the calling key''s policies allow this send? Never executes'
+      summary: 'Dry run: would the policies of the caller, or of a named key, agent or app, allow this send?'
       operationId: create_policy_evaluation
       requestBody:
         required: true
@@ -4785,6 +5420,16 @@ paths:
       - agents
       summary: List agent identities
       operationId: list_agents
+      parameters:
+      - name: include_archived
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Also list archived agents.
+          default: false
+          title: Include Archived
+        description: Also list archived agents.
       responses:
         '200':
           description: Successful Response
@@ -4798,6 +5443,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '410':
           $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '404':
@@ -4968,11 +5615,62 @@ paths:
         mutating: true
         idempotency_key: true
         agent_key_allowed: false
+    delete:
+      tags:
+      - agents
+      summary: 'Archive an agent: its keys are revoked, it leaves the list and its name is free again'
+      operationId: archive_agent
+      parameters:
+      - name: agent_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Agent Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentArchived'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: agent:admin
+      x-llm:
+        scope: agent:admin
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
   /v1/agents/{agent_id}/keys:
     post:
       tags:
       - agents
-      summary: Mint a key for the agent (bounded scopes, secret shown once)
+      summary: Create a key for the agent (bounded scopes, secret shown once)
       operationId: create_agent_key
       parameters:
       - name: agent_id
@@ -5122,6 +5820,16 @@ paths:
             type: string
           - type: 'null'
           title: Status
+      - name: archived
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: false leaves archived faxes out; true lists only those.
+          title: Archived
+        description: false leaves archived faxes out; true lists only those.
       responses:
         '200':
           description: Successful Response
@@ -5259,7 +5967,7 @@ paths:
     delete:
       tags:
       - inbox
-      summary: Delete a received fax
+      summary: 'Delete a received fax: its file and the text read from it'
       operationId: delete_inbox_item
       parameters:
       - name: inbox_id
@@ -5654,6 +6362,60 @@ paths:
         mutating: false
         idempotency_key: false
         agent_key_allowed: true
+  /v1/number-orders/{order_id}/dismissals:
+    post:
+      tags:
+      - numbers
+      summary: Put a failed number order away
+      description: Sets dismissed_at on an order that failed. The order stays in the list. An order that did not
+        fail answers 409 conflict.
+      operationId: dismiss_number_order
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay the first successful response for the same request within 24 hours. Reusing the idempotency
+          header with a different request returns 409 idempotency_key_conflict. Responses include Idempotent-Replayed:
+          true on replay.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: number:buy
+      x-llm:
+        scope: number:buy
+        mutating: true
+        idempotency_key: true
+        agent_key_allowed: false
   /v1/numbers:
     get:
       tags:
@@ -6891,6 +7653,80 @@ paths:
         agent_key_allowed: true
         hint: Read enabled first. The routes and their prices are present only while the product is open here.
       description: No API key is needed.
+  /v1/one-time-sends/preview:
+    post:
+      tags:
+      - one-time-sends
+      summary: Count the pages of a document before an order is made
+      description: 'Reads a file (or text) exactly as the create would and answers its page count and its first
+        page as a small picture, or the create''s own refusal: too_many_pages, encrypted_pdf, unsupported_format,
+        document_too_large and the other document codes. The price of the document follows from the count and the
+        route of GET /one-time-sends/config. Nothing is stored: no order, no account, no file. No credential is
+        needed. Idempotency-Key is accepted but ignored: the call changes nothing, so a repeat reads the file again.'
+      operationId: preview_one_time_document
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'The document: PDF, PNG, JPEG or TIFF. Send this or text.'
+                text:
+                  type: string
+                  description: The text of the fax, in place of a file.
+                text_format:
+                  type: string
+                  enum:
+                  - text
+                  - markdown
+              type: object
+          application/json:
+            schema:
+              properties:
+                text:
+                  type: string
+                  description: The text of the fax.
+                text_format:
+                  type: string
+                  enum:
+                  - text
+                  - markdown
+              type: object
+              required:
+              - text
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeInspection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      security:
+      - {}
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: fax:send
+      x-llm:
+        scope: fax:send
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+        key_optional: true
   /v1/one-time-sends:
     post:
       tags:
@@ -7490,6 +8326,74 @@ paths:
         idempotency_key: false
         agent_key_allowed: true
         order_token: true
+  /v1/one-time-sends/{one_time_order_id}/pages/{page_number}:
+    get:
+      tags:
+      - one-time-sends
+      summary: 'One page of a one-time order as a picture: the cover sheet, then the document'
+      description: Page 1 is the cover sheet. Before the fax is released the cover is drawn from the order as it
+        will be printed, and the other pages from the uploaded document. After the release the pages are the file
+        that went to the carrier. order.preview says how many pages can be asked for. 404 not_found for a page that
+        does not exist or a copy that is no longer held (deleted after the send, or after its retention). A key
+        or session of the order's organization may read it, and so may the status token, as the header or as ?t=.
+      operationId: get_one_time_order_page
+      parameters:
+      - name: one_time_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: One Time Order Id
+      - name: page_number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Page Number
+      - name: t
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The status token, when no header carries it.
+          title: T
+        description: The status token, when no header carries it.
+      - name: X-FFA-Order-Token
+        in: header
+        required: false
+        schema:
+          type: string
+        description: The status token of the order, for a caller without a key or a session.
+      responses:
+        '200':
+          description: The page as a PNG
+          content:
+            image/png: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      - orderToken: []
+      x-required-scope: fax:read
+      x-llm:
+        scope: fax:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+        order_token: true
   /v1/one-time-sends/{one_time_order_id}/checkout:
     post:
       tags:
@@ -7988,6 +8892,12 @@ components:
           - type: string
           - type: 'null'
           title: Disabled At
+        archived_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Archived At
+          description: 'Set on an archived agent: disabled for good and left out of the list.'
       additionalProperties: true
       type: object
       required:
@@ -8015,6 +8925,11 @@ components:
         actor:
           type: string
           title: Actor
+        actor_label:
+          type: string
+          title: Actor Label
+          description: 'The actor in words: a member''s email, the agent''s name, an API key''s prefix.'
+          default: unknown
         action:
           type: string
           title: Action
@@ -8067,6 +8982,29 @@ components:
       required:
       - items
       title: AgentActivityPage
+    AgentArchived:
+      properties:
+        id:
+          type: string
+          title: Id
+        deleted:
+          type: boolean
+          title: Deleted
+          description: 'Always false: an agent has history and its row is kept.'
+        archived:
+          type: boolean
+          title: Archived
+        keys_revoked:
+          type: integer
+          title: Keys Revoked
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - deleted
+      - archived
+      - keys_revoked
+      title: AgentArchived
     AgentCreate:
       properties:
         name:
@@ -8182,6 +9120,30 @@ components:
       additionalProperties: false
       type: object
       title: AgentUpdate
+    AlreadyAllowed:
+      properties:
+        number:
+          type: string
+          title: Number
+        countries:
+          items:
+            type: string
+          type: array
+          title: Countries
+          description: The listed countries whose route serves this number.
+        prefixes:
+          items:
+            type: string
+          type: array
+          title: Prefixes
+          description: The listed prefixes this number's route carries.
+      additionalProperties: true
+      type: object
+      required:
+      - number
+      - countries
+      - prefixes
+      title: AlreadyAllowed
     ApiKey:
       properties:
         id:
@@ -8404,6 +9366,39 @@ components:
       additionalProperties: false
       type: object
       title: ApprovalDecision
+    ApprovalDocument:
+      properties:
+        id:
+          type: string
+          title: Id
+        filename:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filename
+          description: The file's name; null when the document row is gone.
+        page_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page Count
+        state:
+          type: string
+          enum:
+          - available
+          - deleted
+          - changed
+          title: State
+          description: 'available: the document is the one the request binds. deleted: it was deleted. changed:
+            its sha256 is no longer the bound one. A send with this approval is refused in the last two.'
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - filename
+      - page_count
+      - state
+      title: ApprovalDocument
     ApprovalRequest:
       properties:
         id:
@@ -8441,11 +9436,29 @@ components:
         requested_by:
           type: string
           title: Requested By
+        requested_by_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Requested By Name
+          description: 'The requester as people read it: the key''s label, the agent''s name, the connected app''s
+            name or the person''s address. null when the actor has no row in the organization any more.'
         decided_by:
           anyOf:
           - type: string
           - type: 'null'
           title: Decided By
+        decided_by_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decided By Name
+          description: The decider, named the same way.
+        document:
+          anyOf:
+          - $ref: '#/components/schemas/ApprovalDocument'
+          - type: 'null'
+          description: The document a send request binds (bound.document_id). null for a help request.
         reason:
           anyOf:
           - type: string
@@ -8816,6 +9829,12 @@ components:
         held_micro:
           type: integer
           title: Held Micro
+        held_jobs:
+          type: integer
+          title: Held Jobs
+          description: 'How many fax jobs still have their hold in place: queued, sending, or ended unknown and
+            waiting for a reconcile. Their holds add up to held_micro.'
+          default: 0
         top_up_url:
           anyOf:
           - type: string
@@ -8835,6 +9854,7 @@ components:
         currency: USD
         available_micro: 100000000
         held_micro: 0
+        held_jobs: 0
         top_up_url: https://app.faxforagents.com/app/billing
     BillingSettings:
       properties:
@@ -8948,6 +9968,12 @@ components:
         updated_at:
           type: string
           title: Updated At
+        archived_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Archived At
+          description: Set on a removed budget that has history. It is disabled for good.
       additionalProperties: true
       type: object
       required:
@@ -9032,6 +10058,26 @@ components:
       additionalProperties: false
       type: object
       title: BudgetPatch
+    BudgetRemoved:
+      properties:
+        id:
+          type: string
+          title: Id
+        deleted:
+          type: boolean
+          title: Deleted
+          description: True when the budget never charged a hold and its row is gone.
+        archived:
+          type: boolean
+          title: Archived
+          description: 'True when the budget has history: disabled and hidden, row kept.'
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - deleted
+      - archived
+      title: BudgetRemoved
     Capabilities:
       properties:
         environment:
@@ -9082,6 +10128,19 @@ components:
           title: Scopes
           description: 'Every scope the platform defines, the list a new key is made from. It is not what the calling
             credential holds: GET /v1/me returns that under scopes.'
+        default_scopes:
+          items:
+            type: string
+          type: array
+          title: Default Scopes
+          description: The scopes a key gets when POST /v1/api-keys names none.
+        admin_scopes:
+          items:
+            type: string
+          type: array
+          title: Admin Scopes
+          description: 'The scopes that administer the organization: keys, webhooks, billing, members, policies,
+            agents, approval decisions and number purchases. An agent''s own key never carries one.'
         approvals:
           type: boolean
           title: Approvals
@@ -9272,6 +10331,60 @@ components:
       - excluded
       - note
       title: Coverage
+    DataRequest:
+      properties:
+        id:
+          type: string
+          title: Id
+        kind:
+          type: string
+          enum:
+          - export
+          - deletion
+          title: Kind
+        status:
+          type: string
+          enum:
+          - open
+          - closed
+          - withdrawn
+          title: Status
+          description: open until a person at Fax for Agents answers it; withdrawn by an owner; else closed.
+        created_at:
+          type: string
+          title: Created At
+        due_at:
+          type: string
+          title: Due At
+          description: '30 days after the request: when it is answered at the latest.'
+        closed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Closed At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - kind
+      - status
+      - created_at
+      - due_at
+      - closed_at
+      title: DataRequest
+      description: An export or deletion request of the organization and where it stands.
+    DataRequestList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DataRequest'
+          type: array
+          title: Items
+      additionalProperties: true
+      type: object
+      required:
+      - items
+      title: DataRequestList
     Deleted:
       properties:
         id:
@@ -9294,6 +10407,12 @@ components:
         webhook_id:
           type: string
           title: Webhook Id
+        webhook_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webhook Url
+          description: The destination's URL, kept after the destination is deleted.
         event_id:
           type: string
           title: Event Id
@@ -9362,6 +10481,108 @@ components:
       - created_at
       - delivered_at
       title: Delivery
+    DeliveryDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        webhook_id:
+          type: string
+          title: Webhook Id
+        webhook_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webhook Url
+          description: The destination's URL, kept after the destination is deleted.
+        event_id:
+          type: string
+          title: Event Id
+        event_type:
+          type: string
+          title: Event Type
+        attempt:
+          type: integer
+          title: Attempt
+        status:
+          type: string
+          title: Status
+        response_status:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Response Status
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        duration_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Duration Ms
+        replay_of:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Replay Of
+        schedule_s:
+          items:
+            type: integer
+          type: array
+          title: Schedule S
+        next_attempt_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Attempt At
+        created_at:
+          type: string
+          title: Created At
+        delivered_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Delivered At
+        webhook_deleted:
+          type: boolean
+          title: Webhook Deleted
+          description: True when the destination was deleted since.
+        request_headers:
+          additionalProperties:
+            type: string
+          type: object
+          title: Request Headers
+          description: The headers every attempt carries. webhook-id is the event id. webhook-timestamp and webhook-signature
+            are made at each attempt and are not stored, so their values here say what they hold. The signing secret
+            is never returned.
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+          description: The JSON body that is sent, the same at every attempt.
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - webhook_id
+      - event_id
+      - event_type
+      - attempt
+      - status
+      - response_status
+      - error
+      - duration_ms
+      - replay_of
+      - schedule_s
+      - next_attempt_at
+      - created_at
+      - delivered_at
+      - webhook_deleted
+      - request_headers
+      - payload
+      title: DeliveryDetail
     DeliveryPage:
       properties:
         items:
@@ -9423,6 +10644,15 @@ components:
           additionalProperties: true
           type: object
           title: Validation
+        converted_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Converted From
+        received:
+          anyOf:
+          - $ref: '#/components/schemas/DocumentReceived'
+          - type: 'null'
         upload_id:
           anyOf:
           - type: string
@@ -9475,6 +10705,8 @@ components:
         render_reason: null
         validation:
           warnings: []
+        converted_from: null
+        received: null
         upload_id: up_01a1dba3f80475159f9195dc92d38428
         created_at: '2026-11-14T19:58:38.630Z'
         expires_at: '2026-12-14T19:58:38.739Z'
@@ -9532,6 +10764,11 @@ components:
           - type: string
           - type: 'null'
           title: Next Cursor
+        total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total
       additionalProperties: true
       type: object
       required:
@@ -9567,6 +10804,39 @@ components:
       - render_reason
       - items
       title: DocumentPages
+    DocumentReceived:
+      properties:
+        inbox_item_id:
+          type: string
+          title: Inbox Item Id
+        from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: From
+        received_at:
+          type: string
+          title: Received At
+      additionalProperties: true
+      type: object
+      required:
+      - inbox_item_id
+      - received_at
+      title: DocumentReceived
+      description: The received fax a document is the file of.
+    DocumentUpdate:
+      properties:
+        filename:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Filename
+          description: 'The new file name. The stored file is a PDF: a name without .pdf gets it added.'
+      additionalProperties: false
+      type: object
+      required:
+      - filename
+      title: DocumentUpdate
     DocumentValidation:
       properties:
         id:
@@ -10493,6 +11763,11 @@ components:
           type: string
           title: Media Status
           default: stored
+        file_deleted_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Deleted At
         duration_secs:
           anyOf:
           - type: integer
@@ -10583,6 +11858,11 @@ components:
           type: string
           title: Media Status
           default: stored
+        file_deleted_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Deleted At
         duration_secs:
           anyOf:
           - type: integer
@@ -10643,6 +11923,7 @@ components:
         project_id: proj_01a1dba3f790751897c1a738a5631341
         partial_content: false
         media_status: stored
+        file_deleted_at: null
         duration_secs: null
         provider: sandbox
         read_at: null
@@ -10771,6 +12052,10 @@ components:
           - type: string
           - type: 'null'
           title: Next Cursor
+        unread:
+          type: integer
+          title: Unread
+          default: 0
       additionalProperties: true
       type: object
       required:
@@ -10792,11 +12077,13 @@ components:
           project_id: proj_01a1dba3f790751897c1a738a5631341
           partial_content: false
           media_status: stored
+          file_deleted_at: null
           duration_secs: null
           provider: sandbox
           read_at: null
           expires_at: '2027-02-12T19:58:39.009Z'
         next_cursor: null
+        unread: 1
     InboxUpdate:
       properties:
         status:
@@ -10824,6 +12111,7 @@ components:
           - type: string
           - type: 'null'
           title: Locality
+          description: 'The area that was searched for. Null in test: test numbers are made up and have no city.'
         items:
           items:
             $ref: '#/components/schemas/InventoryNumber'
@@ -10870,6 +12158,11 @@ components:
         setup_micro:
           type: integer
           title: Setup Micro
+        owned:
+          type: boolean
+          title: Owned
+          description: True when your organization already holds this number. An order of it is refused.
+          default: false
       additionalProperties: true
       type: object
       required:
@@ -10942,6 +12235,25 @@ components:
       required:
       - email
       title: InvitationCreate
+    InvitationLink:
+      properties:
+        id:
+          type: string
+          title: Id
+        url:
+          type: string
+          title: Url
+          description: The new invitation link. Shown once.
+        expires_at:
+          type: string
+          title: Expires At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - url
+      - expires_at
+      title: InvitationLink
     InvitationList:
       properties:
         items:
@@ -11387,6 +12699,12 @@ components:
           - type: string
           - type: 'null'
           title: Completed At
+        dismissed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dismissed At
+          description: When a person put this failed order away. Null until then.
       additionalProperties: true
       type: object
       required:
@@ -11477,6 +12795,40 @@ components:
       additionalProperties: false
       type: object
       title: NumberUpdate
+    OneTimeAttempts:
+      properties:
+        made:
+          type: integer
+          title: Made
+        max:
+          type: integer
+          title: Max
+        last_failure_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Failure Code
+        last_finished_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Finished At
+        retry_delay_seconds:
+          type: integer
+          title: Retry Delay Seconds
+      additionalProperties: true
+      type: object
+      required:
+      - made
+      - max
+      - last_failure_code
+      - last_finished_at
+      - retry_delay_seconds
+      title: OneTimeAttempts
+      description: |-
+        The tries of an order's fax while it is still going out. A busy line or one that does not answer
+        is dialed again (``max`` tries in all, about ``retry_delay_seconds`` apart). ``last_failure_code`` is
+        why the last finished try did not get through, null when no try has ended.
     OneTimeCard:
       properties:
         last4:
@@ -11748,6 +13100,31 @@ components:
       - quote_id
       - sender_name
       title: OneTimeFromQuote
+    OneTimeInspection:
+      properties:
+        document_pages:
+          type: integer
+          title: Document Pages
+        thumbnail_png_base64:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Thumbnail Png Base64
+        warnings:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Warnings
+      additionalProperties: true
+      type: object
+      required:
+      - document_pages
+      - thumbnail_png_base64
+      title: OneTimeInspection
+      description: |-
+        What a file would be as a one-time order's document: its page count, and its first page as a small
+        PNG (base64, null when this server cannot draw one). Nothing is stored and no order is made.
     OneTimeJob:
       properties:
         order_id:
@@ -11797,6 +13174,44 @@ components:
           anyOf:
           - $ref: '#/components/schemas/OneTimeCard'
           - type: 'null'
+        sender_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sender Name
+          description: 'On a receipt: the sender''s name.'
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+          description: 'On a receipt: the address the order was made with.'
+        authorized_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorized At
+          description: 'On a receipt: when the card was held.'
+        settled_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Settled At
+          description: 'On a receipt: when the payment provider confirmed the charge, or the release.'
+        failure_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Code
+          description: 'On a receipt: why the order ended unpaid.'
+        price:
+          anyOf:
+          - additionalProperties:
+              type: integer
+            type: object
+          - type: 'null'
+          title: Price
+          description: 'On a receipt: flat_micro, included_pages and extra_page_micro the amount follows from.'
       additionalProperties: true
       type: object
       required:
@@ -12011,6 +13426,18 @@ components:
           - type: 'null'
           title: Fax
           description: The fax job (the FaxJob shape) once the order was released; null before.
+        attempts:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeAttempts'
+          - type: 'null'
+          description: 'The tries of the order''s fax while it has not ended: how many were made, of how many, and
+            why the last one did not get through. Null before the fax exists and once it ended.'
+        preview:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimePreview'
+          - type: 'null'
+          description: Whether the order's pages can be looked at (the cover sheet and the document). Present on
+            the read of one order; null in a list and in the create's answer.
         created_at:
           type: string
           title: Created At
@@ -12263,6 +13690,18 @@ components:
           - type: 'null'
           title: Fax
           description: The fax job (the FaxJob shape) once the order was released; null before.
+        attempts:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimeAttempts'
+          - type: 'null'
+          description: 'The tries of the order''s fax while it has not ended: how many were made, of how many, and
+            why the last one did not get through. Null before the fax exists and once it ended.'
+        preview:
+          anyOf:
+          - $ref: '#/components/schemas/OneTimePreview'
+          - type: 'null'
+          description: Whether the order's pages can be looked at (the cover sheet and the document). Present on
+            the read of one order; null in a list and in the create's answer.
         created_at:
           type: string
           title: Created At
@@ -12331,6 +13770,35 @@ components:
       required:
       - items
       title: OneTimeOrderPage
+    OneTimePreview:
+      properties:
+        state:
+          type: string
+          enum:
+          - draft
+          - sent
+          - deleted
+          - unavailable
+          title: State
+        pages:
+          type: integer
+          title: Pages
+        cover_pages:
+          type: integer
+          title: Cover Pages
+      additionalProperties: true
+      type: object
+      required:
+      - state
+      - pages
+      - cover_pages
+      title: OneTimePreview
+      description: |-
+        Whether the pages of an order can be looked at, and how many. ``draft``: the cover sheet as it
+        will be printed and the uploaded document, before the fax is released. ``sent``: the file that went
+        to the carrier, cover sheet first. ``deleted``: no copy is held any more (the sender asked for the
+        deletion, the retention ended, or the order ended before a fax was made). ``unavailable``: nothing
+        to show right now. Page ``n`` is ``GET /v1/one-time-sends/{id}/pages/{n}``, 1 to ``pages``.
     OneTimePrice:
       properties:
         price_version:
@@ -12372,6 +13840,13 @@ components:
         estimated_wait_minutes:
           type: integer
           title: Estimated Wait Minutes
+        paused:
+          type: boolean
+          title: Paused
+          description: An operator has paused sends on this route. A fax to it is kept and goes out when the route
+            is resumed; no time can be estimated. A one-time order that is not sent within 48 hours of its release
+            is canceled and the card is not charged.
+          default: false
       additionalProperties: true
       type: object
       required:
@@ -12458,7 +13933,7 @@ components:
       properties:
         name:
           type: string
-          maxLength: 200
+          maxLength: 80
           minLength: 1
           title: Name
       additionalProperties: false
@@ -12482,6 +13957,13 @@ components:
           - member
           - viewer
           title: Role
+        suspended_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suspended At
+          description: Set while a review has paused sending for the whole organization. A send answers `account_suspended`
+            until it is cleared. Reads keep working.
       additionalProperties: true
       type: object
       required:
@@ -12698,6 +14180,27 @@ components:
           type: boolean
           title: Executed
           default: false
+        subject:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subject
+          description: 'The caller the plan was evaluated for: the calling principal, or the key, agent or connected
+            app the request named.'
+        under_policy:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Under Policy
+          description: Whether any policy binds that caller. false with decision deny means no policy applies, not
+            that a policy refused the plan.
+        approval_required:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Approval Required
+          description: 'What a send of this plan by that caller would need: true when a person has to approve it.
+            false when a policy allows it, and for a test send by a caller no policy binds.'
         usage:
           type:
           - object
@@ -12748,6 +14251,29 @@ components:
             maxLength: 32
           - type: 'null'
           title: From
+        key_id:
+          anyOf:
+          - type: string
+            pattern: ^[a-z]{2,8}_[0-9a-f]{32}$
+          - type: 'null'
+          title: Key Id
+          description: Evaluate as this API key of your organization instead of the caller, in the key's environment.
+            Choose at most one of key_id, agent_id and connection_id.
+        agent_id:
+          anyOf:
+          - type: string
+            pattern: ^[a-z]{2,8}_[0-9a-f]{32}$
+          - type: 'null'
+          title: Agent Id
+          description: Evaluate as this agent of your organization (bindings to single keys excluded).
+        connection_id:
+          anyOf:
+          - type: string
+            pattern: ^[a-z]{2,8}_[0-9a-f]{32}$
+          - type: 'null'
+          title: Connection Id
+          description: Evaluate as this connected app (an OAuth grant, GET /v1/oauth/grants), in the connection's
+            environment. A signed-in person may name their own.
       additionalProperties: false
       type: object
       title: PolicyEvaluationCreate
@@ -12763,6 +14289,43 @@ components:
       required:
       - items
       title: PolicyList
+    PolicyRuleCheck:
+      properties:
+        already_allowed:
+          items:
+            $ref: '#/components/schemas/AlreadyAllowed'
+          type: array
+          title: Already Allowed
+          description: The listed numbers a listed country or prefix allows anyway. A destination passes a policy
+            when it matches any of the three lists, so for these numbers the number list adds nothing.
+      additionalProperties: true
+      type: object
+      required:
+      - already_allowed
+      title: PolicyRuleCheck
+    PolicyRuleCheckCreate:
+      properties:
+        allowed_destinations:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Allowed Destinations
+        allowed_countries:
+          items:
+            type: string
+          type: array
+          maxItems: 300
+          title: Allowed Countries
+        allowed_country_prefixes:
+          items:
+            type: string
+          type: array
+          maxItems: 300
+          title: Allowed Country Prefixes
+      additionalProperties: false
+      type: object
+      title: PolicyRuleCheckCreate
     PolicyUpdate:
       properties:
         name:
@@ -12821,6 +14384,12 @@ components:
         created_by:
           type: string
           title: Created By
+        created_by_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created By Name
+          description: 'Who wrote the version as people read it: a person''s address or a key''s label.'
         created_at:
           type: string
           title: Created At
@@ -13073,6 +14642,12 @@ components:
         authorization_required:
           type: boolean
           title: Authorization Required
+        route_paused:
+          type: boolean
+          title: Route Paused
+          description: An operator has paused sends on this quote's route. A fax sent now is accepted and stays
+            queued until the route is resumed. Read when the quote is answered, not stored.
+          default: false
         warnings:
           items:
             additionalProperties: true
@@ -13149,6 +14724,7 @@ components:
         sender_name: null
         delete_after_send: false
         authorization_required: false
+        route_paused: false
         warnings:
         - code: sandbox
           message: 'test key: sandbox provider, not charged'
@@ -13239,6 +14815,12 @@ components:
           - type: string
           - type: 'null'
           title: From
+        sender_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sender Name
+          description: The sender name the fax was sent with, when one was given.
         document_sha256:
           type: string
           title: Document Sha256
@@ -13270,6 +14852,12 @@ components:
         provider:
           type: string
           title: Provider
+        provider_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider Ref
+          description: The carrier's own reference for the last attempt, when it gave one.
         created_at:
           type: string
           title: Created At
@@ -13295,6 +14883,11 @@ components:
         generated_at:
           type: string
           title: Generated At
+        seller:
+          anyOf:
+          - $ref: '#/components/schemas/Seller'
+          - type: 'null'
+          description: The company that issues the receipt.
         one_time:
           anyOf:
           - $ref: '#/components/schemas/OneTimeJob'
@@ -13331,6 +14924,7 @@ components:
         failure_code: null
         to: '+15550000001'
         from: null
+        sender_name: null
         document_sha256: c00b74dede1923d27ba294643d5e79cb5454089e3f1b7b151cc46aa520a2410f
         transmitted_sha256: 9f18c276fb5160f70fecb50f8e53768a7aa631e3e2a140447d3cb4f0377eb6e4
         billable_pages: 2
@@ -13340,6 +14934,7 @@ components:
         captured_micro: 0
         currency: USD
         provider: sandbox
+        provider_ref: sbx_311dd5d5bc5dfd76
         created_at: '2026-11-14T19:58:38.794Z'
         completed_at: '2026-11-14T19:58:38.910Z'
         evidence:
@@ -13376,6 +14971,11 @@ components:
           finished_at: '2026-11-14T19:58:38.907Z'
         note: Delivery evidence as the carrier reported it. It is not legal proof of acceptance by the recipient.
         generated_at: '2026-11-14T19:58:38.943Z'
+        seller:
+          name: JSB Holdings LLC
+          address: 8 The Green, Dover, DE 19901, US
+          product: Fax for Agents
+          email: hello@faxforagents.com
         one_time: null
     ReleaseRequest:
       properties:
@@ -13402,6 +15002,17 @@ components:
         message:
           type: string
           title: Message
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+          description: The request, as `GET .../data-requests` lists it.
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
       additionalProperties: true
       type: object
       required:
@@ -13554,6 +15165,29 @@ components:
       - name
       - schema
       title: SchemaCreate
+    Seller:
+      properties:
+        name:
+          type: string
+          title: Name
+        address:
+          type: string
+          title: Address
+        product:
+          type: string
+          title: Product
+        email:
+          type: string
+          title: Email
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - address
+      - product
+      - email
+      title: Seller
+      description: The company a receipt is issued by.
     SenderVerification:
       properties:
         id:
@@ -13670,6 +15304,80 @@ components:
       - expires_at
       - content_type
       title: SignedUrl
+    StatementLine:
+      properties:
+        id:
+          type: string
+          title: Id
+        created_at:
+          type: string
+          title: Created At
+        type:
+          type: string
+          enum:
+          - topup
+          - fax
+          - received_fax
+          - number
+          - extraction
+          - release
+          - refund
+          - dispute
+          - credit
+          - adjustment
+          - other
+          title: Type
+        description:
+          type: string
+          title: Description
+          description: What happened, in plain words. Never an account name.
+        amount_micro:
+          type: integer
+          title: Amount Micro
+          description: 'Signed the way the wallet moved: positive is money in.'
+        balance_after_micro:
+          type: integer
+          title: Balance After Micro
+          description: The available balance right after this line.
+        ref_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref Type
+        ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref Id
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - created_at
+      - type
+      - description
+      - amount_micro
+      - balance_after_micro
+      - ref_type
+      - ref_id
+      title: StatementLine
+    StatementPage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/StatementLine'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      additionalProperties: true
+      type: object
+      required:
+      - items
+      title: StatementPage
     Subscription:
       properties:
         id:
@@ -14221,6 +15929,12 @@ components:
         status:
           type: string
           title: Status
+        failing:
+          type: boolean
+          title: Failing
+          description: True when the latest delivery this destination was sent did not get a 2xx answer. It turns
+            false with the next delivery that does.
+          default: false
         previous_secret_expires_at:
           anyOf:
           - type: string
@@ -14252,6 +15966,7 @@ components:
         - fax.delivered
         - fax.failed
         status: active
+        failing: false
         previous_secret_expires_at: null
         created_at: '2026-11-14T19:58:39.486Z'
         updated_at: '2026-11-14T19:58:39.486Z'
@@ -14350,6 +16065,12 @@ components:
         status:
           type: string
           title: Status
+        failing:
+          type: boolean
+          title: Failing
+          description: True when the latest delivery this destination was sent did not get a 2xx answer. It turns
+            false with the next delivery that does.
+          default: false
         previous_secret_expires_at:
           anyOf:
           - type: string
@@ -14386,6 +16107,7 @@ components:
         - fax.delivered
         - fax.failed
         status: active
+        failing: false
         previous_secret_expires_at: null
         created_at: '2026-11-14T19:58:39.486Z'
         updated_at: '2026-11-14T19:58:39.486Z'

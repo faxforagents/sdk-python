@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.0 (2026-11-15)
+
+Follows API 1.20.6. The saved spec has 161 operations and the models are regenerated from it.
+Every operation has a method on both clients.
+
+New: `billing.statement(kind=..., from_=..., to=...)` reads the wallet statement, one line per event with the balance after it.
+`billing.iter_statement` follows `next_cursor`, and `billing.statement_csv` returns the same lines as CSV text. Scope `billing:read`.
+New: `documents.rename(document_id, filename=...)`. A name without `.pdf` gets it added. Scope `document:write`.
+New: `webhooks.get_delivery(delivery_id)` returns `DeliveryDetail`, with the headers and the JSON body that were sent.
+New: `billing.delete_budget(budget_id)`. A budget that never charged a hold is deleted, and one with history is archived.
+New: `agents.archive(agent_id)` revokes the agent's keys and takes it out of the list. Its name is free again.
+New: `numbers.dismiss_order(order_id)` puts a failed number order away. Any other order raises `ConflictError`.
+New: `policies.check_rules(...)` names the numbers of a draft's `allowed_destinations` that a listed country or prefix already allows. It writes nothing.
+New: `members.resend_invitation` mails an open invitation again. `members.link_invitation` answers a new link once, for you to hand over. Both stop the old link.
+New: `organizations.list_data_requests()` and `organizations.withdraw_data_deletion(request_id)`.
+New: `one_time_sends.preview(file=...)` or `preview(text=...)` counts the pages of a document before any order exists, with no key.
+New: `one_time_sends.get_page(order_id, page_number)` returns one page of an order as PNG bytes. Page 1 is the cover sheet.
+
+New parameters: `faxes.list` and `faxes.iter` take `q`, a fax number or the start of a job id.
+`documents.list` and `documents.iter` take `source`, `exclude_source` and `q`. `inbox.list` and `inbox.iter` take `archived`.
+`agents.list` and `billing.list_budgets` take `include_archived`. `policies.evaluate` takes `key_id`, `agent_id` or `connection_id`.
+
+Changed: `approvals.reject` no longer needs `reason`. A help request closes without one. A send request still needs it, and the API answers 422 without it.
+`approvals.list(status="used")` finds the approvals a send consumed. They read `approved`, and `consumed_by_job_id` names the fax.
+Before API 1.20.6 such an approval read `expired` once its time had passed.
+
+New fields, among them `DocumentPage.total`, `InboxPage.unread`, `Balance.held_jobs`, `Quote.route_paused` and `Document.converted_from`.
+`Receipt` has `seller`, `provider_ref` and `sender_name`. `ApprovalRequest` has `document`, `requested_by_name` and `decided_by_name`.
+18 new models, among them `StatementPage`, `StatementLine`, `PolicyRuleCheck`, `DeliveryDetail` and `OneTimeInspection`.
+
+The API now refuses an organization name over 80 characters with 422. It took 200 before.
+Nothing is removed. Other model names, fields and optionality are kept.
+
 ## 0.6.1 (2026-11-15)
 
 Follows API 1.20.5. The saved spec has 147 operations and the models are regenerated from it.

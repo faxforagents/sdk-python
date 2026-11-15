@@ -628,3 +628,332 @@ def test_an_early_receipt_names_the_fax_state(client: Client, api: respx.MockRou
         client.faxes.get_receipt("fax_y")
     assert exc.value.state == "active" and exc.value.code == "conflict" and exc.value.retryable is False
     assert ConflictError(status=409, code="quote_consumed", message="used").state is None
+
+
+def statement_line(**over: object) -> dict[str, object]:
+    return {
+        "id": "led_" + "7" * 32,
+        "created_at": "2026-11-15T09:00:00Z",
+        "type": "topup",
+        "description": "Top-up",
+        "amount_micro": 25_000_000,
+        "balance_after_micro": 125_000_000,
+        "ref_type": "topup_session",
+        "ref_id": "tus_1",
+        **over,
+    }
+
+
+def test_statement_pages_filters_and_csv(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.6: one line per wallet event with the balance after it, as JSON pages or as CSV."""
+    route = api.get("/v1/statement")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [statement_line()], "next_cursor": "led_9"}),
+        httpx.Response(200, json={"items": [statement_line(id="led_2", type="fax")], "next_cursor": "led_2"}),
+        httpx.Response(200, json={"items": [statement_line(id="led_1", type="fax")], "next_cursor": None}),
+    ]
+    page = client.billing.statement(kind="topup", from_="2026-11-01", to="2026-11-15", limit=10)
+    assert page.items[0].balance_after_micro == 125_000_000 and page.next_cursor == "led_9"
+    sent = route.calls[0].request.url.params
+    assert dict(sent) == {"kind": "topup", "from": "2026-11-01", "to": "2026-11-15", "limit": "10"}
+    assert "idempotency-key" not in route.calls[0].request.headers
+    assert [line.id for line in client.billing.iter_statement(kind="fax")] == ["led_2", "led_1"]
+    assert dict(route.calls[1].request.url.params) == {"kind": "fax"}
+    assert dict(route.calls[2].request.url.params) == {"kind": "fax", "cursor": "led_2"}
+    csv = api.get("/v1/statement.csv").respond(
+        200, content=b"date,type,amount\n2026-11-15,topup,25.00\n", headers={"content-type": "text/csv"}
+    )
+    text = client.billing.statement_csv(to="2026-11-15")
+    assert text.splitlines() == ["date,type,amount", "2026-11-15,topup,25.00"]
+    assert dict(csv.calls.last.request.url.params) == {"to": "2026-11-15"}
+
+
+def test_document_rename_and_the_list_filters(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.6: PATCH renames a document. The list filters by source and text and answers total."""
+    doc_id = document()["id"]
+    patch = api.patch(f"/v1/documents/{doc_id}").respond(200, json=document(filename="contract.pdf"))
+    renamed = client.documents.rename(doc_id, filename="contract", idempotency_key="k-rename")
+    assert renamed.filename == "contract.pdf"
+    assert json.loads(patch.calls.last.request.content) == {"filename": "contract"}
+    assert patch.calls.last.request.headers["idempotency-key"] == "k-rename"
+    listed = api.get("/v1/documents")
+    listed.side_effect = [
+        httpx.Response(200, json={"items": [document(source="inbound")], "next_cursor": None, "total": 1}),
+        httpx.Response(200, json={"items": [], "next_cursor": None, "total": 0}),
+    ]
+    page = client.documents.list(source="inbound", q="+1415")
+    assert page.total == 1 and page.items[0].source == "inbound"
+    assert dict(listed.calls[0].request.url.params) == {"source": "inbound", "q": "+1415"}
+    assert list(client.documents.iter(exclude_source="inbound", limit=5)) == []
+    assert dict(listed.calls[1].request.url.params) == {"exclude_source": "inbound", "limit": "5"}
+
+
+def test_fax_search_by_number_or_job_id(client: Client, api: respx.MockRouter) -> None:
+    route = api.get("/v1/faxes")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [fax_job(state="failed")], "next_cursor": None}),
+        httpx.Response(200, json={"items": [fax_job()], "next_cursor": None}),
+    ]
+    page = client.faxes.list(q="fax_1111", state="failed")
+    assert page.items[0].state == "failed"
+    assert dict(route.calls[0].request.url.params) == {"state": "failed", "q": "fax_1111"}
+    assert len(list(client.faxes.iter(q="(555) 000-0001"))) == 1
+    assert route.calls[1].request.url.params["q"] == "(555) 000-0001"
+
+
+def test_one_webhook_delivery_with_what_was_sent(client: Client, api: respx.MockRouter) -> None:
+    detail = {
+        "id": "dlv_1",
+        "webhook_id": "wh_1",
+        "webhook_url": "https://example.com/hooks/fax",
+        "event_id": "evt_1",
+        "event_type": "fax.delivered",
+        "attempt": 1,
+        "status": "delivered",
+        "response_status": 200,
+        "error": None,
+        "duration_ms": 84,
+        "replay_of": None,
+        "schedule_s": [0, 60, 300],
+        "next_attempt_at": None,
+        "created_at": "2026-11-15T09:00:00Z",
+        "delivered_at": "2026-11-15T09:00:01Z",
+        "webhook_deleted": False,
+        "request_headers": {"webhook-id": "evt_1", "content-type": "application/json"},
+        "payload": {"type": "fax.delivered", "data": {"id": "fax_1"}},
+    }
+    api.get("/v1/webhook-deliveries/dlv_1").respond(200, json=detail)
+    got = client.webhooks.get_delivery("dlv_1")
+    assert got.request_headers["webhook-id"] == "evt_1" and got.payload["type"] == "fax.delivered"
+    assert got.webhook_url == "https://example.com/hooks/fax" and got.webhook_deleted is False
+
+
+def budget(**over: object) -> dict[str, object]:
+    return {
+        "id": "bud_1",
+        "environment": "test",
+        "scope": "organization",
+        "project_id": None,
+        "agent_id": None,
+        "period": "monthly",
+        "limit_micro": 10_000_000,
+        "spent_micro": 0,
+        "remaining_micro": 10_000_000,
+        "status": "active",
+        "resets_at": "2026-12-01T00:00:00Z",
+        "created_at": "2026-11-01T00:00:00Z",
+        "updated_at": "2026-11-01T00:00:00Z",
+        **over,
+    }
+
+
+def test_budget_removal_and_the_archived_list(client: Client, api: respx.MockRouter) -> None:
+    removed = api.delete("/v1/budgets/bud_1").respond(
+        200, json={"id": "bud_1", "deleted": False, "archived": True}
+    )
+    gone = client.billing.delete_budget("bud_1")
+    assert gone.archived is True and gone.deleted is False
+    assert len(removed.calls.last.request.headers["idempotency-key"]) == 36
+    listed = api.get("/v1/budgets")
+    listed.side_effect = [
+        httpx.Response(200, json={"items": [budget(archived_at="2026-11-15T09:00:00Z")]}),
+        httpx.Response(200, json={"items": []}),
+    ]
+    assert client.billing.list_budgets(include_archived=True).items[0].archived_at
+    assert dict(listed.calls[0].request.url.params) == {"include_archived": "true"}
+    client.billing.list_budgets()
+    assert dict(listed.calls[1].request.url.params) == {}
+
+
+def test_agent_archive_and_the_archived_list(client: Client, api: respx.MockRouter) -> None:
+    route = api.delete("/v1/agents/agent_1").respond(
+        200, json={"id": "agent_1", "deleted": False, "archived": True, "keys_revoked": 2}
+    )
+    archived = client.agents.archive("agent_1", idempotency_key="k-archive")
+    assert archived.keys_revoked == 2 and archived.archived is True
+    assert route.calls.last.request.headers["idempotency-key"] == "k-archive"
+    listed = api.get("/v1/agents").respond(200, json={"items": []})
+    assert client.agents.list(include_archived=True).items == []
+    assert dict(listed.calls.last.request.url.params) == {"include_archived": "true"}
+
+
+def number_order(**over: object) -> dict[str, object]:
+    return {
+        "id": "nor_1",
+        "environment": "test",
+        "status": "failed",
+        "e164": "+15550001000",
+        "country": "US",
+        "number_type": "local",
+        "number_id": None,
+        "number": None,
+        "provider": "sandbox",
+        "recurring_charge_micro": 2_000_000,
+        "recurring_period": "month",
+        "first_month_hold_micro": 2_000_000,
+        "currency": "USD",
+        "error": "Sandbox carrier refused this number order.",
+        "created_at": "2026-11-15T09:00:00Z",
+        "completed_at": "2026-11-15T09:00:05Z",
+        **over,
+    }
+
+
+def test_number_order_dismissal(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.6: a failed order is put away. Any other order answers 409 conflict."""
+    route = api.post("/v1/number-orders/nor_1/dismissals")
+    route.side_effect = [
+        httpx.Response(200, json=number_order(dismissed_at="2026-11-15T10:00:00Z")),
+        httpx.Response(409, json=error("conflict", "this order did not fail")),
+    ]
+    order = client.numbers.dismiss_order("nor_1")
+    assert order.dismissed_at == "2026-11-15T10:00:00Z" and order.status == "failed"
+    assert route.calls[0].request.content == b""
+    assert len(route.calls[0].request.headers["idempotency-key"]) == 36
+    with pytest.raises(ConflictError):
+        client.numbers.dismiss_order("nor_1")
+
+
+def evaluation(**over: object) -> dict[str, object]:
+    return {
+        "decision": "allow",
+        "rule": None,
+        "reason": "allowed by policy",
+        "policy_id": "pol_1",
+        "policy_version_id": "polv_1",
+        "policy_name": "US only",
+        "version": 1,
+        "denials": [],
+        "plan": {"to": "+15550000001"},
+        **over,
+    }
+
+
+def test_policy_rule_check_and_an_evaluation_for_an_agent(client: Client, api: respx.MockRouter) -> None:
+    check = api.post("/v1/policy-rule-checks").respond(
+        200, json={"already_allowed": [{"number": "+14155550100", "countries": ["US"], "prefixes": []}]}
+    )
+    found = client.policies.check_rules(
+        allowed_destinations=("+14155550100", "+447700900123"), allowed_countries=["US"]
+    )
+    assert found.already_allowed[0].number == "+14155550100" and found.already_allowed[0].countries == ["US"]
+    assert json.loads(check.calls.last.request.content) == {
+        "allowed_destinations": ["+14155550100", "+447700900123"],
+        "allowed_countries": ["US"],
+    }
+    evaluate = api.post("/v1/policy-evaluations").respond(
+        200, json=evaluation(subject="agent_1", under_policy=True, approval_required=False)
+    )
+    result = client.policies.evaluate(to="+15550000001", document_id="doc_" + "2" * 32, agent_id="agent_1")
+    assert result.subject == "agent_1" and result.under_policy is True and result.approval_required is False
+    assert json.loads(evaluate.calls.last.request.content) == {
+        "to": "+15550000001",
+        "document_id": "doc_" + "2" * 32,
+        "agent_id": "agent_1",
+    }
+
+
+def invitation(**over: object) -> dict[str, object]:
+    return {
+        "id": "inv_1",
+        "email": "sam@example.com",
+        "role": "member",
+        "invited_by": "user_1",
+        "created_at": "2026-11-15T09:00:00Z",
+        "expires_at": "2026-11-22T09:00:00Z",
+        "accepted_at": None,
+        **over,
+    }
+
+
+def test_invitation_resend_and_a_link_to_hand_over(client: Client, api: respx.MockRouter) -> None:
+    resend = api.post("/v1/invitations/inv_1/resend").respond(200, json=invitation())
+    assert client.members.resend_invitation("inv_1").expires_at == "2026-11-22T09:00:00Z"
+    assert len(resend.calls.last.request.headers["idempotency-key"]) == 36
+    link = api.post("/v1/invitations/inv_1/link").respond(
+        200,
+        json={
+            "id": "inv_1",
+            "url": "https://app.example.test/join/abc",
+            "expires_at": "2026-11-22T09:00:00Z",
+        },
+    )
+    made = client.members.link_invitation("inv_1", idempotency_key="k-link")
+    assert made.url == "https://app.example.test/join/abc"
+    assert link.calls.last.request.headers["idempotency-key"] == "k-link"
+
+
+def data_request(**over: object) -> dict[str, object]:
+    return {
+        "id": "orq_1",
+        "kind": "deletion",
+        "status": "open",
+        "created_at": "2026-11-15T09:00:00Z",
+        "due_at": "2026-12-15T09:00:00Z",
+        "closed_at": None,
+        **over,
+    }
+
+
+def test_data_requests_and_withdrawing_a_deletion(client: Client, api: respx.MockRouter) -> None:
+    api.get("/v1/organizations/current/data-requests").respond(
+        200, json={"items": [data_request(), data_request(id="orq_2", kind="export", status="closed")]}
+    )
+    listed = client.organizations.list_data_requests()
+    assert [(r.kind, r.status) for r in listed.items] == [("deletion", "open"), ("export", "closed")]
+    route = api.delete("/v1/organizations/current/deletion-requests/orq_1")
+    route.side_effect = [
+        httpx.Response(200, json=data_request(status="withdrawn", closed_at="2026-11-15T10:00:00Z")),
+        httpx.Response(
+            409, json=error("conflict", "not open any more", details={"reason": "request_closed"})
+        ),
+    ]
+    assert client.organizations.withdraw_data_deletion("orq_1").status == "withdrawn"
+    with pytest.raises(ConflictError) as exc:
+        client.organizations.withdraw_data_deletion("orq_1")
+    assert exc.value.details == {"reason": "request_closed"}
+
+
+def test_inbox_archived_filter_and_the_unread_count(client: Client, api: respx.MockRouter) -> None:
+    route = api.get("/v1/inbox").respond(200, json={"items": [], "next_cursor": None, "unread": 3})
+    page = client.inbox.list(archived=False)
+    assert page.unread == 3
+    assert dict(route.calls.last.request.url.params) == {"archived": "false"}
+    assert list(client.inbox.iter(archived=True)) == []
+    assert dict(route.calls.last.request.url.params) == {"archived": "true"}
+
+
+def approval(**over: object) -> dict[str, object]:
+    return {
+        "id": "apr_1",
+        "kind": "help",
+        "status": "rejected",
+        "quote_id": None,
+        "bound": {},
+        "message": "Which number should I use?",
+        "requested_by": "key_1",
+        "decided_by": "user_1",
+        "reason": None,
+        "consumed_by_job_id": None,
+        "created_at": "2026-11-15T09:00:00Z",
+        "expires_at": "2026-11-16T09:00:00Z",
+        "decided_at": "2026-11-15T09:05:00Z",
+        **over,
+    }
+
+
+def test_used_approvals_and_closing_a_help_request(client: Client, api: respx.MockRouter) -> None:
+    """API 1.20.6: a used approval reads approved, and a help request closes without a reason."""
+    used = approval(
+        kind="send", status="approved", quote_id="quote_1", consumed_by_job_id="fax_1", requested_by_name="ci"
+    )
+    listed = api.get("/v1/approval-requests").respond(200, json={"items": [used], "next_cursor": None})
+    page = client.approvals.list(status="used")
+    assert page.items[0].status == "approved" and page.items[0].consumed_by_job_id == "fax_1"
+    assert page.items[0].requested_by_name == "ci"
+    assert dict(listed.calls.last.request.url.params) == {"status": "used"}
+    reject = api.post("/v1/approval-requests/apr_1/reject").respond(200, json=approval())
+    assert client.approvals.reject("apr_1").status == "rejected"
+    assert json.loads(reject.calls.last.request.content) == {}
+    client.approvals.reject("apr_1", reason="wrong number")
+    assert json.loads(reject.calls.last.request.content) == {"reason": "wrong number"}

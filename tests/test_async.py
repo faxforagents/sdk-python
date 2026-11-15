@@ -142,3 +142,81 @@ async def test_async_receipts_and_an_upload_without_a_type(
     session = await aclient.documents.create_upload(filename="scan.png", size_bytes=9)
     assert session.content_type == "image/png"
     assert b"content_type" not in create.calls.last.request.content
+
+
+async def test_async_statement_pages_and_csv(aclient: AsyncClient, api: respx.MockRouter) -> None:
+    line = {
+        "id": "led_1",
+        "created_at": "2026-11-15T09:00:00Z",
+        "type": "fax",
+        "description": "Fax to +15550000001",
+        "amount_micro": -39_000,
+        "balance_after_micro": 99_961_000,
+        "ref_type": "fax_job",
+        "ref_id": "fax_1",
+    }
+    route = api.get("/v1/statement")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [line], "next_cursor": "led_1"}),
+        httpx.Response(200, json={"items": [{**line, "id": "led_0"}], "next_cursor": None}),
+    ]
+    ids = [item.id async for item in aclient.billing.iter_statement(from_="2026-11-01")]
+    assert ids == ["led_1", "led_0"]
+    assert dict(route.calls[0].request.url.params) == {"from": "2026-11-01"}
+    assert dict(route.calls[1].request.url.params) == {"from": "2026-11-01", "cursor": "led_1"}
+    api.get("/v1/statement.csv").respond(200, content=b"date,amount\n", headers={"content-type": "text/csv"})
+    assert await aclient.billing.statement_csv(kind="fax") == "date,amount\n"
+
+
+async def test_async_new_writes(aclient: AsyncClient, api: respx.MockRouter) -> None:
+    import json
+
+    from tests.conftest import document
+
+    doc_id = document()["id"]
+    rename = api.patch(f"/v1/documents/{doc_id}").respond(200, json=document(filename="lease.pdf"))
+    assert (await aclient.documents.rename(doc_id, filename="lease")).filename == "lease.pdf"
+    assert json.loads(rename.calls.last.request.content) == {"filename": "lease"}
+    api.delete("/v1/agents/agent_1").respond(
+        200, json={"id": "agent_1", "deleted": False, "archived": True, "keys_revoked": 1}
+    )
+    assert (await aclient.agents.archive("agent_1")).keys_revoked == 1
+    api.delete("/v1/budgets/bud_1").respond(200, json={"id": "bud_1", "deleted": True, "archived": False})
+    assert (await aclient.billing.delete_budget("bud_1")).deleted is True
+    check = api.post("/v1/policy-rule-checks").respond(200, json={"already_allowed": []})
+    assert (await aclient.policies.check_rules(allowed_country_prefixes=["+1"])).already_allowed == []
+    assert json.loads(check.calls.last.request.content) == {"allowed_country_prefixes": ["+1"]}
+    link = {"id": "inv_1", "url": "https://app.example.test/join/x", "expires_at": "2026-11-22T00:00:00Z"}
+    api.post("/v1/invitations/inv_1/link").respond(200, json=link)
+    assert (await aclient.members.link_invitation("inv_1")).url.endswith("/join/x")
+    withdrawn = {
+        "id": "orq_1",
+        "kind": "deletion",
+        "status": "withdrawn",
+        "created_at": "2026-11-15T09:00:00Z",
+        "due_at": "2026-12-15T09:00:00Z",
+        "closed_at": "2026-11-15T10:00:00Z",
+    }
+    api.delete("/v1/organizations/current/deletion-requests/orq_1").respond(200, json=withdrawn)
+    assert (await aclient.organizations.withdraw_data_deletion("orq_1")).status == "withdrawn"
+    api.get("/v1/organizations/current/data-requests").respond(200, json={"items": [withdrawn]})
+    assert (await aclient.organizations.list_data_requests()).items[0].id == "orq_1"
+
+
+async def test_async_filters_and_one_time_reads(aclient: AsyncClient, api: respx.MockRouter) -> None:
+    faxes = api.get("/v1/faxes").respond(200, json={"items": [fax_job()], "next_cursor": None})
+    assert len([job async for job in aclient.faxes.iter(q="+15550000001")]) == 1
+    assert dict(faxes.calls.last.request.url.params) == {"q": "+15550000001"}
+    inbox = api.get("/v1/inbox").respond(200, json={"items": [], "next_cursor": None, "unread": 0})
+    assert (await aclient.inbox.list(archived=True)).unread == 0
+    assert dict(inbox.calls.last.request.url.params) == {"archived": "true"}
+    preview = api.post("/v1/one-time-sends/preview").respond(
+        200, json={"document_pages": 1, "thumbnail_png_base64": None}
+    )
+    assert (await aclient.one_time_sends.preview(text="Hello")).document_pages == 1
+    assert preview.calls.last.request.headers["authorization"].startswith("Bearer ffa_test_")
+    page = api.get("/v1/one-time-sends/oto_1/pages/2").respond(
+        200, content=b"\x89PNG", headers={"content-type": "image/png"}
+    )
+    assert await aclient.one_time_sends.get_page("oto_1", 2) == b"\x89PNG"
+    assert "x-ffa-order-token" not in page.calls.last.request.headers
