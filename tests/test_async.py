@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
-from faxforagents import AsyncClient
-from tests.conftest import api_key_with_secret, fax_job, quote, topup_session
+from faxforagents import AsyncClient, ConflictError
+from tests.conftest import api_key_with_secret, delivery, error, fax_job, quote, topup_session
 
 
 async def test_async_send_and_wait(aclient: AsyncClient, api: respx.MockRouter) -> None:
@@ -257,3 +258,29 @@ async def test_async_topup_cancel_statement_type_and_cover_check(
     room = await aclient.one_time_sends.check_cover(subject="Form", message="Hello")
     assert room.fits is True and room.lines_left == 30
     assert json.loads(cover.calls.last.request.content) == {"subject": "Form", "message": "Hello"}
+
+
+async def test_async_topup_checkout_read_and_a_deleted_webhook(
+    aclient: AsyncClient, api: respx.MockRouter
+) -> None:
+    tid = topup_session()["id"]
+    read = api.get(f"/v1/topup-sessions/{tid}")
+    read.side_effect = [
+        httpx.Response(200, json=topup_session(checkout_status="processing")),
+        httpx.Response(200, json=topup_session(checkout_status=None)),
+    ]
+    found = await aclient.billing.get_topup_session(tid, check_checkout=True)
+    assert found.checkout_status == "processing"
+    assert dict(read.calls[0].request.url.params) == {"check_checkout": "true"}
+    assert (await aclient.billing.get_topup_session(tid)).checkout_status is None
+    assert read.calls[1].request.url.query == b""
+    replay = api.post("/v1/webhook-deliveries/dlv_1/replay")
+    replay.side_effect = [
+        httpx.Response(202, json=delivery(id="dlv_3", replay_of="dlv_1")),
+        httpx.Response(409, json=error("conflict", "deleted", details={"reason": "webhook_deleted"})),
+    ]
+    again = await aclient.webhooks.replay_delivery("dlv_1")
+    assert again.replay_of == "dlv_1" and again.webhook_deleted is False
+    with pytest.raises(ConflictError) as exc:
+        await aclient.webhooks.replay_delivery("dlv_1")
+    assert exc.value.details == {"reason": "webhook_deleted"}

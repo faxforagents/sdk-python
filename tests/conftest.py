@@ -170,3 +170,25 @@ def topup_session(**over: Any) -> dict[str, Any]:
         "completed_at": None,
     }
     return {**base, **over}
+
+
+def delivery(**over: Any) -> dict[str, Any]:
+    base = {
+        "id": "dlv_1",
+        "webhook_id": "wh_1",
+        "webhook_url": "https://example.com/hooks/fax",
+        "event_id": "evt_1",
+        "event_type": "fax.delivered",
+        "attempt": 1,
+        "status": "pending",
+        "response_status": None,
+        "error": None,
+        "duration_ms": None,
+        "replay_of": None,
+        "schedule_s": [0, 60, 300],
+        "next_attempt_at": None,
+        "created_at": "2026-11-15T09:00:00Z",
+        "delivered_at": None,
+        "webhook_deleted": False,
+    }
+    return {**base, **over}

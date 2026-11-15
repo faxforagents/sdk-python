@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.9.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.10.
 # All earlier schemas are kept. Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
 info:
@@ -26,7 +26,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.20.9
+  version: 1.20.10
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -236,9 +236,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: 'The key expired, so it cannot be rotated (conflict, with details.reason key_expired and
-            details.expires_at). Create a new key to replace it. Also idempotency_key_conflict: the Idempotency-Key
-            was used with a different body.'
+          description: 'The key expired, so it cannot be rotated. error.code is conflict, error.details.reason is
+            "key_expired" and error.details.expires_at says when it expired. Create a new key to replace it. idempotency_key_conflict:
+            the Idempotency-Key was used with a different request, or that request is still being processed.'
           content:
             application/json:
               schema:
@@ -733,7 +733,12 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'document_expired: the document passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -790,7 +795,12 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'document_expired: the document passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '422':
@@ -884,7 +894,12 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'document_expired: the document passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -925,7 +940,12 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'document_expired: the document passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -974,7 +994,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'document_expired: the document passed its retention date and is no longer kept.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
       security:
@@ -1013,7 +1037,12 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'document_expired: the document passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -2563,7 +2592,14 @@ paths:
         '402':
           $ref: '#/components/responses/PaymentRequired'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2665,6 +2701,19 @@ paths:
         schema:
           type: string
           title: Topup Session Id
+      - name: check_checkout
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Ask Stripe about the Checkout of an open top-up and answer its state as checkout_status.
+            The page Stripe returns the person to asks it, because the event that credits the wallet can arrive
+            seconds after the payment.
+          default: false
+          title: Check Checkout
+        description: Ask Stripe about the Checkout of an open top-up and answer its state as checkout_status. The
+          page Stripe returns the person to asks it, because the event that credits the wallet can arrive seconds
+          after the payment.
       responses:
         '200':
           description: Successful Response
@@ -2728,13 +2777,21 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: 'The top-up has no open Checkout to cancel: it was paid, declined or charged off session
-            (conflict, with details.status). details.reason is paid when it was paid before the cancel. Also idempotency_key_conflict:
-            the Idempotency-Key was used with a different body.'
+          description: 'The top-up has no open Checkout to cancel: it was paid, declined or charged off session.
+            error.code is conflict and error.details.status is the top-up''s status. error.details.reason is "paid"
+            when the payment came in before the cancel. idempotency_key_conflict: the Idempotency-Key was used with
+            a different request, or that request is still being processed.'
           content:
             application/json:
               schema:
@@ -2825,7 +2882,14 @@ paths:
         '402':
           $ref: '#/components/responses/PaymentRequired'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -3408,7 +3472,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
@@ -3451,7 +3522,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
@@ -3494,7 +3572,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -3534,7 +3619,14 @@ paths:
         '402':
           $ref: '#/components/responses/PaymentRequired'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -3616,7 +3708,14 @@ paths:
         '402':
           $ref: '#/components/responses/PaymentRequired'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: 'The credential is valid and is not allowed to do this. scope_missing puts the scope in error.details.scope.
+            Other codes are agent_forbidden and approval_required. A session can also meet csrf_invalid and reauth_required.
+            A test key, or a session switched to Test, gets environment_not_billable here: the test wallet is never
+            funded, so billing takes live.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -5993,7 +6092,12 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'inbox_item_expired: the received fax passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -6052,7 +6156,12 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'inbox_item_expired: the received fax passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '422':
@@ -6105,7 +6214,12 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'inbox_item_expired: the received fax passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -6148,7 +6262,12 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'inbox_item_expired: the received fax passed its retention date and is no longer kept. organization_deleted:
+            the organization is being deleted, so the call is refused.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
         '429':
@@ -6197,7 +6316,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '410':
-          $ref: '#/components/responses/Gone'
+          description: 'inbox_item_expired: the received fax passed its retention date and is no longer kept.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/UnprocessableContent'
       security:
@@ -8931,15 +9054,16 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     Conflict:
-      description: The resource is in a state that refuses the call, or the Idempotency-Key was used with a different
-        request (idempotency_key_conflict). error.code names the state.
+      description: 'The resource is in a state that refuses the call. A state with a code of its own is named by
+        error.code, for example quote_expired. Otherwise error.code is conflict and error.message says what is in
+        the way. idempotency_key_conflict: the Idempotency-Key was used with a different request, or that request
+        is still being processed.'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     Gone:
-      description: 'What the call asks for is no longer kept. document_expired and inbox_item_expired: the document
-        or the received fax passed its retention date. organization_deleted: the organization is being deleted.'
+      description: 'organization_deleted: the organization is being deleted, so the call is refused.'
       content:
         application/json:
           schema:
@@ -10631,6 +10755,11 @@ components:
           - type: 'null'
           title: Delivered At
           description: When the destination answered 2xx. Null until then.
+        webhook_deleted:
+          type: boolean
+          title: Webhook Deleted
+          description: True when the destination was deleted since. The deliveries that were waiting are not sent,
+            and no delivery to it can be replayed.
       additionalProperties: true
       type: object
       required:
@@ -10733,7 +10862,8 @@ components:
         webhook_deleted:
           type: boolean
           title: Webhook Deleted
-          description: True when the destination was deleted since.
+          description: True when the destination was deleted since. The deliveries that were waiting are not sent,
+            and no delivery to it can be replayed.
         request_headers:
           additionalProperties:
             type: string
@@ -13006,7 +13136,7 @@ components:
           - type: 'null'
           title: Email Pdf
           description: Attach the PDF of each received fax to the notice mail. The mail goes to the verified address
-            of an owner of the organization and to no other address. A PDF over 15 MB is not attached. It needs
+            of an owner of the organization and to no other address. A PDF over 15 MiB is not attached. It needs
             the scope number:buy. An agent, an OAuth connection and a connected app are refused.
       additionalProperties: false
       type: object
@@ -13293,28 +13423,34 @@ components:
         to_name:
           anyOf:
           - type: string
-            maxLength: 1000
+            maxLength: 120
           - type: 'null'
           title: To Name
+          description: The recipient's name, printed in the To line. At most 120 characters, not counting spaces
+            at either end.
         subject:
           anyOf:
           - type: string
-            maxLength: 1000
+            maxLength: 200
           - type: 'null'
           title: Subject
+          description: Printed in a Subject line when it is given. At most 200 characters, not counting spaces at
+            either end.
         message:
           anyOf:
           - type: string
-            maxLength: 8000
+            maxLength: 2000
           - type: 'null'
           title: Message
+          description: The note printed under the Message heading. It has to fit on the one cover page. At most
+            2,000 characters, not counting spaces at either end.
       additionalProperties: false
       type: object
       title: OneTimeCoverCheck
       description: |-
         The fields a one-time order prints on its cover sheet, as a form holds them before the order exists.
-        Every field may be empty. The limits of the create apply (cover.to_name 120 characters, cover.subject
-        200, cover.message 2,000).
+        Every field may be empty. to_name, subject and message have the create's limits, and a longer one is
+        refused as the create refuses it: 422 invalid_request on cover.
     OneTimeCoverRoom:
       properties:
         fits:
@@ -14472,11 +14608,14 @@ components:
           - type: string
           - type: 'null'
           title: Policy Name
+          description: The name of that policy. Null when none binds.
         version:
           anyOf:
           - type: integer
           - type: 'null'
           title: Version
+          description: 'The number of that version: 1 for the policy''s first rules, one more for each change. Null
+            when none binds.'
         managed:
           anyOf:
           - type: string
@@ -14684,15 +14823,20 @@ components:
         day_jobs:
           type: integer
           title: Day Jobs
+          description: Sends this policy allowed so far in the current UTC day.
         day_amount_micro:
           type: integer
           title: Day Amount Micro
+          description: The amount of those sends in micro-USD, as priced when the policy allowed each one. A fax
+            that fails later still counts.
         month_jobs:
           type: integer
           title: Month Jobs
+          description: Sends this policy allowed so far in the current UTC month.
         month_amount_micro:
           type: integer
           title: Month Amount Micro
+          description: The amount of this month's sends in micro-USD, counted the same way as the day's.
       additionalProperties: true
       type: object
       required:
@@ -14738,11 +14882,14 @@ components:
           - type: string
           - type: 'null'
           title: Policy Name
+          description: The name of that policy. Null when none binds.
         version:
           anyOf:
           - type: integer
           - type: 'null'
           title: Version
+          description: 'The number of that version: 1 for the policy''s first rules, one more for each change. Null
+            when none binds.'
         managed:
           anyOf:
           - type: string
@@ -16030,6 +16177,21 @@ components:
           - type: string
           - type: 'null'
           title: Completed At
+        checkout_status:
+          anyOf:
+          - type: string
+            enum:
+            - open
+            - complete
+            - processing
+            - expired
+          - type: 'null'
+          title: Checkout Status
+          description: 'Stripe''s own state of the hosted Checkout, read from Stripe when a read of an open top-up
+            asks with check_checkout=true. complete: the payment was made at Stripe, and the wallet is credited
+            when Stripe''s event arrives, usually within seconds. processing: the person finished at Stripe with
+            a payment method that confirms later, such as a bank debit, which can take days. Null when not asked,
+            or when Stripe could not be read.'
       additionalProperties: true
       type: object
       required:
