@@ -175,19 +175,57 @@ class Documents(_Resource):
         await self.complete_upload(session.id, sha256=hashlib.sha256(data).hexdigest())
         return await self.create(upload_id=session.id, filename=name)
 
-    async def list(self, *, cursor: str | None = None, limit: int | None = None) -> m.DocumentPage:
-        """Documents, newest first. Scope: document:read."""
-        return await self._h.request(
-            "GET", "/v1/documents", model=m.DocumentPage, params={"cursor": cursor, "limit": limit}
-        )
+    async def list(
+        self,
+        *,
+        source: str | None = None,
+        exclude_source: str | None = None,
+        q: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> m.DocumentPage:
+        """Documents, newest first. ``total`` counts every document that matches. Scope: document:read.
 
-    def iter(self, *, limit: int | None = None) -> AsyncIterator[m.Document]:
-        """Every document, following next_cursor."""
-        return apaginate(self.list, {"limit": limit})
+        ``source`` keeps one source: upload, image, text, markdown, html or inbound, the files of received
+        faxes. ``exclude_source`` leaves one out. ``q`` finds part of a file name, or of the sender's number
+        for a received fax."""
+        params = {
+            "source": source,
+            "exclude_source": exclude_source,
+            "q": q,
+            "cursor": cursor,
+            "limit": limit,
+        }
+        return await self._h.request("GET", "/v1/documents", model=m.DocumentPage, params=params)
+
+    def iter(
+        self,
+        *,
+        source: str | None = None,
+        exclude_source: str | None = None,
+        q: str | None = None,
+        limit: int | None = None,
+    ) -> AsyncIterator[m.Document]:
+        """Every document that matches, following next_cursor."""
+        params = {"source": source, "exclude_source": exclude_source, "q": q, "limit": limit}
+        return apaginate(self.list, params)
 
     async def get(self, document_id: str) -> m.Document:
         """Hash, pages and validation state. Scope: document:read."""
         return await self._h.request("GET", f"/v1/documents/{document_id}", model=m.Document)
+
+    async def rename(
+        self, document_id: str, *, filename: str, idempotency_key: str | None = None
+    ) -> m.Document:
+        """Give a document a new file name. A name without ``.pdf`` gets it added. Scope: document:write."""
+        body = m.DocumentUpdate(filename=filename)
+        return await self._h.request(
+            "PATCH",
+            f"/v1/documents/{document_id}",
+            model=m.Document,
+            json=body,
+            idempotency_key=idempotency_key,
+        )
 
     async def delete(self, document_id: str, *, idempotency_key: str | None = None) -> m.Deleted:
         """Delete the document, its bytes and its previews. Scope: document:write."""
@@ -267,21 +305,33 @@ class Faxes(_Resource):
         self,
         *,
         state: str | None = None,
+        q: str | None = None,
         idempotency_key: str | None = None,
         cursor: str | None = None,
         limit: int | None = None,
     ) -> m.FaxJobPage:
         """Fax jobs, newest first. Scope: fax:read.
 
+        ``q`` finds faxes by destination or by id. Text that starts with ``fax_`` is the start of a job
+        id. Anything else is read as a fax number in any spelling. It combines with ``state``.
+
         ``idempotency_key`` finds the send made with that Idempotency-Key. It is a filter here, not a
         header. An empty result does not prove no fax was sent.
         """
-        params = {"state": state, "idempotency_key": idempotency_key, "cursor": cursor, "limit": limit}
+        params = {
+            "state": state,
+            "q": q,
+            "idempotency_key": idempotency_key,
+            "cursor": cursor,
+            "limit": limit,
+        }
         return await self._h.request("GET", "/v1/faxes", model=m.FaxJobPage, params=params)
 
-    def iter(self, *, state: str | None = None, limit: int | None = None) -> AsyncIterator[m.FaxJob]:
-        """Every fax job, following next_cursor."""
-        return apaginate(self.list, {"state": state, "limit": limit})
+    def iter(
+        self, *, state: str | None = None, q: str | None = None, limit: int | None = None
+    ) -> AsyncIterator[m.FaxJob]:
+        """Every fax job that matches, following next_cursor."""
+        return apaginate(self.list, {"state": state, "q": q, "limit": limit})
 
     async def get(self, fax_id: str) -> m.FaxJob:
         """The job with its evidence once delivered or partial. Scope: fax:read."""
@@ -383,6 +433,11 @@ class Webhooks(_Resource):
         params = {"webhook_id": webhook_id, "event_id": event_id, "cursor": cursor, "limit": limit}
         return await self._h.request("GET", "/v1/webhook-deliveries", model=m.DeliveryPage, params=params)
 
+    async def get_delivery(self, delivery_id: str) -> m.DeliveryDetail:
+        """One delivery with the headers and the JSON body that were sent. The signing secret is never in
+        it. Scope: webhook:admin."""
+        return await self._h.request("GET", f"/v1/webhook-deliveries/{delivery_id}", model=m.DeliveryDetail)
+
     async def replay_delivery(self, delivery_id: str, *, idempotency_key: str | None = None) -> m.Delivery:
         """Deliver the event again with the same event id. Scope: webhook:admin."""
         return await self._h.request(
@@ -422,6 +477,43 @@ class Billing(_Resource):
     def iter_ledger(self, *, limit: int | None = None) -> AsyncIterator[m.LedgerEntry]:
         """Every ledger entry, following next_cursor."""
         return apaginate(self.list_ledger, {"limit": limit})
+
+    async def statement(
+        self,
+        *,
+        kind: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> m.StatementPage:
+        """The wallet statement, newest first: one line per event with the balance after it.
+        Scope: billing:read.
+
+        ``kind`` keeps one kind of line, such as ``topup``, ``fax`` or ``refund``. ``from_`` and ``to``
+        are UTC days, YYYY-MM-DD, both included. ``list_ledger`` stays the double-entry record."""
+        params = {"kind": kind, "from": from_, "to": to, "cursor": cursor, "limit": limit}
+        return await self._h.request("GET", "/v1/statement", model=m.StatementPage, params=params)
+
+    def iter_statement(
+        self,
+        *,
+        kind: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+        limit: int | None = None,
+    ) -> AsyncIterator[m.StatementLine]:
+        """Every statement line the filters select, following next_cursor."""
+        return apaginate(self.statement, {"kind": kind, "from_": from_, "to": to, "limit": limit})
+
+    async def statement_csv(
+        self, *, kind: str | None = None, from_: str | None = None, to: str | None = None
+    ) -> str:
+        """The statement as CSV text, every line the filters select in one answer. Scope: billing:read."""
+        data = await self._h.request(
+            "GET", "/v1/statement.csv", params={"kind": kind, "from": from_, "to": to}
+        )
+        return bytes(data).decode("utf-8")
 
     async def get_settings(self) -> m.BillingSettings:
         """Billing settings of the organization. Scope: billing:read."""
@@ -489,9 +581,11 @@ class Billing(_Resource):
             "DELETE", f"/v1/auto-topups/{auto_topup_id}", model=m.Deleted, idempotency_key=idempotency_key
         )
 
-    async def list_budgets(self) -> m.BudgetList:
-        """Spending caps of this environment. Scope: billing:read."""
-        return await self._h.request("GET", "/v1/budgets", model=m.BudgetList)
+    async def list_budgets(self, *, include_archived: bool | None = None) -> m.BudgetList:
+        """Spending caps of this environment. ``include_archived=True`` adds the removed caps that have
+        history. Scope: billing:read."""
+        params = {"include_archived": include_archived}
+        return await self._h.request("GET", "/v1/budgets", model=m.BudgetList, params=params)
 
     async def create_budget(self, *, idempotency_key: str | None = None, **fields: Any) -> m.Budget:
         """A daily or monthly cap for the organization, a project or an agent. Scope: billing:write."""
@@ -507,6 +601,13 @@ class Billing(_Resource):
         body = m.BudgetPatch(**changes)
         return await self._h.request(
             "PATCH", f"/v1/budgets/{budget_id}", model=m.Budget, json=body, idempotency_key=idempotency_key
+        )
+
+    async def delete_budget(self, budget_id: str, *, idempotency_key: str | None = None) -> m.BudgetRemoved:
+        """Remove a cap. One that never charged a hold is deleted, one with history is archived.
+        Scope: billing:write, never an agent key."""
+        return await self._h.request(
+            "DELETE", f"/v1/budgets/{budget_id}", model=m.BudgetRemoved, idempotency_key=idempotency_key
         )
 
     async def usage(
@@ -656,7 +757,10 @@ class Approvals(_Resource):
     async def list(
         self, *, status: str | None = None, cursor: str | None = None, limit: int | None = None
     ) -> m.ApprovalRequestPage:
-        """Requests, pending first. Scope: approval:read."""
+        """Requests, pending first. Scope: approval:read.
+
+        ``status`` is pending, approved, used, rejected, revoked or expired. ``used`` finds the approvals a
+        send consumed. They read ``approved``, and ``consumed_by_job_id`` names the fax."""
         params = {"status": status, "cursor": cursor, "limit": limit}
         return await self._h.request(
             "GET", "/v1/approval-requests", model=m.ApprovalRequestPage, params=params
@@ -697,9 +801,10 @@ class Approvals(_Resource):
         )
 
     async def reject(
-        self, approval_id: str, *, reason: str, idempotency_key: str | None = None
+        self, approval_id: str, *, reason: str | None = None, idempotency_key: str | None = None
     ) -> m.ApprovalRequest:
-        """Reject with a reason. Scope: approval:decide."""
+        """Reject with a reason. A help request closes without one, a send request needs it.
+        Scope: approval:decide."""
         body = m.ApprovalDecision(reason=reason)
         return await self._h.request(
             "POST",
@@ -801,16 +906,53 @@ class Policies(_Resource):
         document_id: str | None = None,
         to: str | None = None,
         from_: str | None = None,
+        key_id: str | None = None,
+        agent_id: str | None = None,
+        connection_id: str | None = None,
     ) -> m.PolicyEvaluation:
-        """Dry run: would this key's policies allow the send? Never executes. Scope: policy:read."""
-        body = {"quote_id": quote_id, "document_id": document_id, "to": to, "from": from_}
+        """Dry run: would the policies allow the send? Never executes. Scope: policy:read.
+
+        With none of ``key_id``, ``agent_id`` or ``connection_id`` the plan is evaluated for the calling
+        key. Pass one of them to evaluate it for another key, agent or connected app of the organization.
+        The answer names that caller in ``subject`` and says in ``approval_required`` whether a person
+        would have to approve the send."""
+        body = {
+            "quote_id": quote_id,
+            "document_id": document_id,
+            "to": to,
+            "from": from_,
+            "key_id": key_id,
+            "agent_id": agent_id,
+            "connection_id": connection_id,
+        }
         return await self._h.request("POST", "/v1/policy-evaluations", model=m.PolicyEvaluation, json=body)
+
+    async def check_rules(
+        self,
+        *,
+        allowed_destinations: Sequence[str] | None = None,
+        allowed_countries: Sequence[str] | None = None,
+        allowed_country_prefixes: Sequence[str] | None = None,
+    ) -> m.PolicyRuleCheck:
+        """Check the destination lists of a draft policy against each other. Writes nothing.
+        Scope: policy:read.
+
+        ``already_allowed`` names the numbers of ``allowed_destinations`` that a listed country or prefix
+        allows anyway. For those numbers the number list adds nothing."""
+        lists = {
+            "allowed_destinations": allowed_destinations,
+            "allowed_countries": allowed_countries,
+            "allowed_country_prefixes": allowed_country_prefixes,
+        }
+        body = {name: list(values) for name, values in lists.items() if values is not None}
+        return await self._h.request("POST", "/v1/policy-rule-checks", model=m.PolicyRuleCheck, json=body)
 
 
 class Agents(_Resource):
-    async def list(self) -> m.AgentList:
-        """Agent identities. Scope: agent:read."""
-        return await self._h.request("GET", "/v1/agents", model=m.AgentList)
+    async def list(self, *, include_archived: bool | None = None) -> m.AgentList:
+        """Agent identities. ``include_archived=True`` adds the archived ones. Scope: agent:read."""
+        params = {"include_archived": include_archived}
+        return await self._h.request("GET", "/v1/agents", model=m.AgentList, params=params)
 
     async def create(self, *, idempotency_key: str | None = None, **fields: Any) -> m.Agent:
         """Register an agent identity. Scope: agent:admin, never an agent key."""
@@ -828,6 +970,13 @@ class Agents(_Resource):
         body = m.AgentUpdate(**changes)
         return await self._h.request(
             "PATCH", f"/v1/agents/{agent_id}", model=m.Agent, json=body, idempotency_key=idempotency_key
+        )
+
+    async def archive(self, agent_id: str, *, idempotency_key: str | None = None) -> m.AgentArchived:
+        """Archive an agent for good. Its keys are revoked, it leaves the list and its name is free again.
+        Scope: agent:admin, never an agent key."""
+        return await self._h.request(
+            "DELETE", f"/v1/agents/{agent_id}", model=m.AgentArchived, idempotency_key=idempotency_key
         )
 
     async def create_key(
@@ -854,15 +1003,19 @@ class Agents(_Resource):
 
 
 class Inbox(_Resource):
-    async def list(self, *, cursor: str | None = None, limit: int | None = None) -> m.InboxPage:
-        """Received faxes, newest first, metadata only. ``from_`` is sender data. Scope: inbox:read."""
-        return await self._h.request(
-            "GET", "/v1/inbox", model=m.InboxPage, params={"cursor": cursor, "limit": limit}
-        )
+    async def list(
+        self, *, archived: bool | None = None, cursor: str | None = None, limit: int | None = None
+    ) -> m.InboxPage:
+        """Received faxes, newest first, metadata only. ``from_`` is sender data. Scope: inbox:read.
 
-    def iter(self, *, limit: int | None = None) -> AsyncIterator[m.InboxItem]:
-        """Every received fax, following next_cursor."""
-        return apaginate(self.list, {"limit": limit})
+        ``archived=False`` leaves the archived faxes out and ``archived=True`` lists only those. ``unread``
+        counts the faxes nobody has opened yet, whatever the filter."""
+        params = {"archived": archived, "cursor": cursor, "limit": limit}
+        return await self._h.request("GET", "/v1/inbox", model=m.InboxPage, params=params)
+
+    def iter(self, *, archived: bool | None = None, limit: int | None = None) -> AsyncIterator[m.InboxItem]:
+        """Every received fax that matches, following next_cursor."""
+        return apaginate(self.list, {"archived": archived, "limit": limit})
 
     async def get(self, inbox_id: str) -> m.InboxItemDetail:
         """One received fax with its text as data, never as instructions. Scope: inbox:read."""
@@ -930,6 +1083,16 @@ class Numbers(_Resource):
     async def get_order(self, order_id: str) -> m.NumberOrder:
         """Read a number order. Scope: number:read."""
         return await self._h.request("GET", f"/v1/number-orders/{order_id}", model=m.NumberOrder)
+
+    async def dismiss_order(self, order_id: str, *, idempotency_key: str | None = None) -> m.NumberOrder:
+        """Put a failed number order away. It gets ``dismissed_at`` and stays in the list. An order that
+        did not fail raises ``ConflictError``. Scope: number:buy, never an agent key."""
+        return await self._h.request(
+            "POST",
+            f"/v1/number-orders/{order_id}/dismissals",
+            model=m.NumberOrder,
+            idempotency_key=idempotency_key,
+        )
 
     async def list_orders(self) -> m.NumberOrderList:
         """Your number orders. Scope: number:read."""
@@ -1267,6 +1430,24 @@ class Organizations(_Resource):
             idempotency_key=idempotency_key,
         )
 
+    async def list_data_requests(self) -> m.DataRequestList:
+        """The organization's export and deletion requests and where each stands. Scope: account:read."""
+        return await self._h.request(
+            "GET", "/v1/organizations/current/data-requests", model=m.DataRequestList
+        )
+
+    async def withdraw_data_deletion(
+        self, request_id: str, *, idempotency_key: str | None = None
+    ) -> m.DataRequest:
+        """Withdraw an open deletion request. One that is no longer open raises ``ConflictError``.
+        Scope: org:admin (an owner), never an agent key."""
+        return await self._h.request(
+            "DELETE",
+            f"/v1/organizations/current/deletion-requests/{request_id}",
+            model=m.DataRequest,
+            idempotency_key=idempotency_key,
+        )
+
     async def download_export_archive(self, token: str, *, exp: str, sig: str) -> bytes:
         """The organization archive of a data export. ``token``, ``exp`` and ``sig`` come from the signed
         link, which lives 72 hours. The link is the credential."""
@@ -1305,6 +1486,32 @@ class Members(_Resource):
             "POST", "/v1/invitations", model=m.Invitation, json=body, idempotency_key=idempotency_key
         )
 
+    async def resend_invitation(
+        self, invitation_id: str, *, idempotency_key: str | None = None
+    ) -> m.Invitation:
+        """Mail an open invitation again, with a new link for 7 days. The old link stops working.
+        Scope: member:admin, never an agent key."""
+        return await self._h.request(
+            "POST",
+            f"/v1/invitations/{invitation_id}/resend",
+            model=m.Invitation,
+            idempotency_key=idempotency_key,
+        )
+
+    async def link_invitation(
+        self, invitation_id: str, *, idempotency_key: str | None = None
+    ) -> m.InvitationLink:
+        """A new link for an open invitation, to hand over yourself. No mail is sent, the old link stops
+        working and ``url`` is shown once. Scope: member:admin, never an agent key.
+
+        The link joins the organization only for a person signed in with the invited address."""
+        return await self._h.request(
+            "POST",
+            f"/v1/invitations/{invitation_id}/link",
+            model=m.InvitationLink,
+            idempotency_key=idempotency_key,
+        )
+
     async def revoke_invitation(self, invitation_id: str, *, idempotency_key: str | None = None) -> None:
         """Withdraw an invitation. Scope: member:admin, never an agent key."""
         await self._h.request("DELETE", f"/v1/invitations/{invitation_id}", idempotency_key=idempotency_key)
@@ -1337,6 +1544,38 @@ class OneTimeSends(_Resource):
     async def config(self) -> m.OneTimeConfig:
         """Whether one-time sends are open, with the card and the limits. No key needed."""
         return await self._h.request("GET", "/v1/one-time-sends/config", model=m.OneTimeConfig)
+
+    async def preview(
+        self,
+        *,
+        file: bytes | str | Path | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
+        text: str | None = None,
+        text_format: str | None = None,
+    ) -> m.OneTimeInspection:
+        """Count the pages of a document before an order is made. Nothing is stored. It works without an
+        API key.
+
+        Pass exactly one of ``file`` or ``text``, as for ``create``. The answer has ``document_pages`` and
+        the first page as a small PNG in ``thumbnail_png_base64``. A file the create would refuse raises
+        the same error here, such as ``too_many_pages`` or ``encrypted_pdf``. With a key: fax:send."""
+        if (file is None) == (text is None):
+            raise ValueError("pass exactly one of file or text")
+        if file is None:
+            return await self._h.request(
+                "POST",
+                "/v1/one-time-sends/preview",
+                model=m.OneTimeInspection,
+                json={"text": text, "text_format": text_format},
+            )
+        name, data, ctype = one_time_file(file, filename, content_type)
+        return await self._h.request(
+            "POST",
+            "/v1/one-time-sends/preview",
+            model=m.OneTimeInspection,
+            files={"file": (name, data, ctype)},
+        )
 
     async def create(
         self,
@@ -1549,6 +1788,17 @@ class OneTimeSends(_Resource):
             headers=token_header(order_token),
             idempotency_key=idempotency_key,
         )
+
+    async def get_page(self, order_id: str, page_number: int, *, order_token: str | None = None) -> bytes:
+        """One page of the order as PNG bytes. Page 1 is the cover sheet, then the document follows.
+
+        ``preview.pages`` on the order says how many pages there are. A page that is not held any more
+        raises ``NotFoundError``. Read it with a key of the order's organization (scope fax:read) or with
+        ``order_token``."""
+        data = await self._h.request(
+            "GET", f"/v1/one-time-sends/{order_id}/pages/{page_number}", headers=token_header(order_token)
+        )
+        return bytes(data)
 
     async def get_receipt_pdf(self, order_id: str, *, order_token: str | None = None) -> bytes:
         """The receipt of the order's fax as a one-page PDF. 409 while the fax has not ended."""

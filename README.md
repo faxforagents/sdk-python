@@ -83,6 +83,11 @@ The same in async form, with `AsyncClient` and `await` on every call.
   document. An image becomes gray letter pages.
 - `documents.create_upload(filename=..., size_bytes=...)` needs no `content_type`. The API reads the
   type from the filename and refuses a filename of another format at once with `unsupported_format`.
+- `billing.statement()` reads the wallet one line per event, with the balance after each line.
+  `billing.statement_csv()` returns the same lines as CSV text.
+- `faxes.list(q=...)` finds a fax by its number or by the start of its id. `documents.list(q=...)` finds
+  a document by file name, or a received fax's file by the sender's number.
+- `one_time_sends.preview(file=...)` counts the pages of a document before any order exists, with no key.
 - `faxes.wait(fax_id)` and `approvals.wait(approval_id)` poll with a timeout.
 - `verify_webhook(secret, headers, body)` checks the Standard Webhooks signature on a delivery.
 - Models are pydantic v2, generated from the public OpenAPI document. Money is an integer count of
@@ -105,24 +110,24 @@ each call needs.
 | Resource | Calls |
 |---|---|
 | `ffa.identity` | `me`, `list_api_keys`, `create_api_key`, `rotate_api_key`, `revoke_api_key` |
-| `ffa.documents` | `create`, `upload`, `create_upload`, `put_upload_content`, `complete_upload`, `cancel_upload`, `list`, `iter`, `get`, `delete`, `get_validation`, `get_download`, `download`, `list_pages` |
+| `ffa.documents` | `create`, `upload`, `create_upload`, `put_upload_content`, `complete_upload`, `cancel_upload`, `list`, `iter`, `get`, `rename`, `delete`, `get_validation`, `get_download`, `download`, `list_pages` |
 | `ffa.quotes` | `create`, `get` |
 | `ffa.faxes` | `create`, `list`, `iter`, `get`, `wait`, `list_events`, `list_attempts`, `get_receipt`, `get_receipt_pdf`, `cancel` |
-| `ffa.webhooks` | `list`, `create`, `update`, `delete`, `rotate_secret`, `test`, `list_deliveries`, `replay_delivery` |
+| `ffa.webhooks` | `list`, `create`, `update`, `delete`, `rotate_secret`, `test`, `list_deliveries`, `get_delivery`, `replay_delivery` |
 | `ffa.events` | `list`, `iter` |
-| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `usage`, exports, invoices, `get_invoice_receipt`, `get_topup_receipt`, subscriptions, `create_portal_session` |
+| `ffa.billing` | `balance`, `list_ledger`, `iter_ledger`, `statement`, `iter_statement`, `statement_csv`, `iter_topup_sessions`, `iter_invoices`, settings, top-ups, auto top-ups, budgets, `delete_budget`, `usage`, exports, invoices, `get_invoice_receipt`, `get_topup_receipt`, subscriptions, `create_portal_session` |
 | `ffa.platform` | `capabilities`, `service_status` |
 | `ffa.sandbox` | `list_scenarios`, `create_scenario`, `create_inbound_fax`, `reset` |
 | `ffa.approvals` | `request`, `request_help`, `list`, `iter`, `get`, `wait`, `approve`, `reject`, `revoke` |
-| `ffa.policies` | `list`, `create`, `effective`, `get_auto_send`, `set_auto_send`, `get`, `update`, `list_versions`, `evaluate` |
-| `ffa.agents` | `list`, `create`, `get`, `update`, `create_key`, `activity` |
+| `ffa.policies` | `list`, `create`, `effective`, `get_auto_send`, `set_auto_send`, `get`, `update`, `list_versions`, `evaluate`, `check_rules` |
+| `ffa.agents` | `list`, `create`, `get`, `update`, `archive`, `create_key`, `activity` |
 | `ffa.inbox` | `list`, `iter`, `get`, `update`, `delete`, `get_download`, `download` |
-| `ffa.numbers` | `coverage`, `inventory`, `create_order`, `list_orders`, `get_order`, `list`, `get`, `update`, `release`, `check_portability`, `list_port_orders`, `create_port_order`, `get_port_order`, `create_port_out_request`, `verify_sender` |
+| `ffa.numbers` | `coverage`, `inventory`, `create_order`, `list_orders`, `get_order`, `dismiss_order`, `list`, `get`, `update`, `release`, `check_portability`, `list_port_orders`, `create_port_order`, `get_port_order`, `create_port_out_request`, `verify_sender` |
 | `ffa.extractions` | `create`, `list`, `iter`, `get`, `correct`, `classify`, `list_classifications`, `iter_classifications`, `get_classification`, `summarize`, `list_summaries`, `iter_summaries`, `get_summary`, `list_schemas`, `create_schema`, `get_schema` |
-| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `download_export_archive` |
-| `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `revoke_invitation` |
+| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `list_data_requests`, `withdraw_data_deletion`, `download_export_archive` |
+| `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `resend_invitation`, `link_invitation`, `revoke_invitation` |
 | `ffa.oauth` | `list_grants`, `iter_grants`, `revoke_grant` |
-| `ffa.one_time_sends` | `config`, `create`, `create_from_quote`, `list`, `iter`, `get`, `wait`, `checkout`, `read_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
+| `ffa.one_time_sends` | `config`, `preview`, `create`, `create_from_quote`, `list`, `iter`, `get`, `get_page`, `wait`, `checkout`, `read_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
 
 `ffa.request("GET", "/v1/anything")` reaches an operation the resources do not cover yet.
 
@@ -133,7 +138,7 @@ only when the carrier's evidence is on the attempt, and `fax.evidence` holds it.
 `unknown` never retransmit on their own. Whether to resend is a human decision.
 
 Sandbox destinations: `+15550000001` delivered, `+15550000002` busy then delivered, `+15550000003`
-partial, `+15550000004` no answer, `+15550000005` unknown, `+15550000006` provider timeout,
+partial (a one-page fax ends failed), `+15550000004` no answer, `+15550000005` unknown, `+15550000006` provider timeout,
 `+15550000007` invalid number. Any other `+1` number is delivered.
 
 ## Errors
@@ -305,7 +310,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.5 and keeps the schemas of the earlier live documents.
+`spec/openapi.yaml` follows the public document at API version 1.20.6 and keeps the schemas of the earlier live documents.
 The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
 It also retains earlier public model names and route-documented response additions.

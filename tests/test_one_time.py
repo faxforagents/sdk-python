@@ -10,7 +10,7 @@ import httpx
 import pytest
 import respx
 
-from faxforagents import AsyncClient, Client, NotFoundError, PaymentRequiredError
+from faxforagents import AsyncClient, Client, InvalidRequestError, NotFoundError, PaymentRequiredError
 from tests.conftest import BASE, KEY, error
 
 CASES: dict[str, Any] = {
@@ -379,3 +379,43 @@ async def test_async_flow(api: respx.MockRouter) -> None:
         assert done.next == "done"
     assert read.calls.last.request.headers["x-ffa-order-token"] == TOKEN
     assert "authorization" not in read.calls.last.request.headers
+
+
+INSPECTION = {"document_pages": 3, "thumbnail_png_base64": "iVBORw0KGgo=", "warnings": []}
+
+
+def test_preview_counts_pages_with_no_key_and_stores_nothing(keyless: Client, api: respx.MockRouter) -> None:
+    """API 1.20.6: the page count of a file or a text before any order exists."""
+    route = api.post("/v1/one-time-sends/preview").respond(200, json=INSPECTION)
+    found = keyless.one_time_sends.preview(text="# Hello", text_format="markdown")
+    assert found.document_pages == 3 and found.thumbnail_png_base64 == "iVBORw0KGgo="
+    sent = route.calls.last.request
+    assert json.loads(sent.content) == {"text": "# Hello", "text_format": "markdown"}
+    assert "authorization" not in sent.headers
+    keyless.one_time_sends.preview(file=b"%PDF-1.7", filename="letter.pdf")
+    upload = route.calls.last.request
+    assert upload.headers["content-type"].startswith("multipart/form-data")
+    assert b'filename="letter.pdf"' in upload.content and b"application/pdf" in upload.content
+    with pytest.raises(ValueError, match="exactly one"):
+        keyless.one_time_sends.preview()
+    with pytest.raises(ValueError, match="exactly one"):
+        keyless.one_time_sends.preview(file=b"%PDF", text="both")
+
+
+def test_preview_raises_the_refusal_of_the_create(keyless: Client, api: respx.MockRouter) -> None:
+    api.post("/v1/one-time-sends/preview").respond(422, json=error("too_many_pages", "20 pages at most"))
+    with pytest.raises(InvalidRequestError) as exc:
+        keyless.one_time_sends.preview(file=b"%PDF", filename="long.pdf")
+    assert exc.value.code == "too_many_pages"
+
+
+def test_a_page_of_the_order_as_png(keyless: Client, api: respx.MockRouter) -> None:
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+    route = api.get(f"/v1/one-time-sends/{ORDER}/pages/1").respond(
+        200, content=png, headers={"content-type": "image/png"}
+    )
+    assert keyless.one_time_sends.get_page(ORDER, 1, order_token=TOKEN) == png
+    assert route.calls.last.request.headers["x-ffa-order-token"] == TOKEN
+    api.get(f"/v1/one-time-sends/{ORDER}/pages/9").respond(404, json=error("not_found", "cannot be shown"))
+    with pytest.raises(NotFoundError):
+        keyless.one_time_sends.get_page(ORDER, 9, order_token=TOKEN)
