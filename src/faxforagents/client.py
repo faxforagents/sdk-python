@@ -1915,9 +1915,10 @@ class OneTimeSends(_Resource):
         return self._h.request("GET", f"/v1/one-time-sends/by-token/{token}", model=m.OneTimeConfirmSummary)
 
     def confirm(self, order_id: str, *, token: str) -> m.OneTimeConfirmed:
-        """Confirm the order with the token of the mailed link. The fax is released. No key needed.
+        """Confirm the order with the token of the mailed link. The fax is released. It takes no API key.
 
-        The link works once. A repeat answers 409 ``link_used`` and sends nothing."""
+        The link works once. A repeat answers 409 ``link_used`` and sends nothing. The link of an order
+        that was canceled answers 409 ``link_canceled``, since API 1.21.2."""
         return self._h.request(
             "POST",
             f"/v1/one-time-sends/{order_id}/confirm",

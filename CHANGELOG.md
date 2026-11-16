@@ -12,6 +12,7 @@ New fields:
 - The public document requires both. The saved spec leaves them optional, so an older payload still parses. Both default to `None`.
 
 `OneTimeConfirmSummary.state` reads `link_canceled` for the confirm link of an order that was canceled.
+`one_time_sends.confirm` on that link raises `ConflictError` with the code `link_canceled`, and its docstring says so.
 
 `ConflictError.reason` reads `details["reason"]`, or `None` when the API sent none.
 A second `billing.create_subscription_checkout` raises `ConflictError` with the reason `plan_active` while the plan is active.
