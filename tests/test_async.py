@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from faxforagents import AsyncClient, ConflictError
+from faxforagents import AsyncClient, ConflictError, ScopeError
 from tests.conftest import api_key_with_secret, delivery, error, fax_job, quote, topup_session
 
 
@@ -284,3 +284,34 @@ async def test_async_topup_checkout_read_and_a_deleted_webhook(
     with pytest.raises(ConflictError) as exc:
         await aclient.webhooks.replay_delivery("dlv_1")
     assert exc.value.details == {"reason": "webhook_deleted"}
+
+
+async def test_async_records_export_created_range_and_workspace_plan(
+    aclient: AsyncClient, api: respx.MockRouter
+) -> None:
+    """API 1.21.0 on the async client: the records export, the created range and the plan."""
+    history = api.get("/v1/records/faxes.csv").respond(
+        200, content=b"direction,id\ninbound,inb_1\n", headers={"content-type": "text/csv"}
+    )
+    text = await aclient.organizations.fax_history_csv(from_="2026-11-16", to="2026-11-16")
+    assert text == "direction,id\ninbound,inb_1\n"
+    assert dict(history.calls.last.request.url.params) == {"from": "2026-11-16", "to": "2026-11-16"}
+    api.get("/v1/records/audit.csv").respond(
+        403, json=error("workspace_required", details={"ended_at": None})
+    )
+    with pytest.raises(ScopeError) as exc:
+        await aclient.organizations.audit_csv()
+    assert exc.value.code == "workspace_required"
+    listed = api.get("/v1/faxes")
+    listed.side_effect = [
+        httpx.Response(200, json={"items": [fax_job(id="fax_a")], "next_cursor": "c2"}),
+        httpx.Response(200, json={"items": [fax_job(id="fax_b")], "next_cursor": None}),
+    ]
+    ids = [job.id async for job in aclient.faxes.iter(created_before="2026-11-17T00:00:00Z")]
+    assert ids == ["fax_a", "fax_b"]
+    assert dict(listed.calls[1].request.url.params) == {
+        "created_before": "2026-11-17T00:00:00Z",
+        "cursor": "c2",
+    }
+    api.get("/v1/subscriptions").respond(200, json={"items": [], "workspace": False})
+    assert (await aclient.billing.list_subscriptions()).plan is None

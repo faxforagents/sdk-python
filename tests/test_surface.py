@@ -203,6 +203,8 @@ def test_every_operation_has_a_method() -> None:
         "list_data_requests": "organizations.list_data_requests",
         "withdraw_data_deletion": "organizations.withdraw_data_deletion",
         "download_export_archive": "organizations.download_export_archive",
+        "get_fax_history_csv": "organizations.fax_history_csv",
+        "get_audit_csv": "organizations.audit_csv",
         "list_members": "members.list",
         "update_member": "members.update",
         "remove_member": "members.remove",

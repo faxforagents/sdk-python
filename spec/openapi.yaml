@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.20.11.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.21.0.
 # An operation reaches every schema here. 0.10.0 dropped 70 earlier schemas that no operation reached.
 # Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
@@ -27,7 +27,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.20.11
+  version: 1.21.0
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -1298,6 +1298,10 @@ paths:
       tags:
       - faxes
       summary: List fax jobs, newest first
+      description: 'Fax jobs of the credential''s organization and environment, newest first, in pages of `limit`.
+        Every filter combines with the others and with `cursor`: pass the same filters with the `next_cursor` of
+        the page before. `created_after` and `created_before` narrow the list to the jobs created in a time range,
+        the start included and the end left out. A range whose start is after its end is refused with 422 invalid_request.'
       operationId: list_faxes
       parameters:
       - name: state
@@ -1338,6 +1342,36 @@ paths:
         description: 'Find faxes by destination or by id. Text that starts with fax_ is the beginning of a job id.
           Anything else is read as a fax number in any spelling: its digits are looked for anywhere in the destination.
           Combines with state.'
+      - name: created_after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: Only jobs created at or after this time. ISO 8601, for example 2026-11-16T00:00:00Z. A time
+            without an offset is read as UTC. Combines with created_before, the other filters and cursor.
+          examples:
+          - '2026-11-16T00:00:00Z'
+          title: Created After
+        description: Only jobs created at or after this time. ISO 8601, for example 2026-11-16T00:00:00Z. A time
+          without an offset is read as UTC. Combines with created_before, the other filters and cursor.
+      - name: created_before
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: Only jobs created before this time, which is left out. ISO 8601, for example 2026-11-17T00:00:00Z.
+            A time without an offset is read as UTC. With created_after, a range that starts after it ends is refused.
+          examples:
+          - '2026-11-17T00:00:00Z'
+          title: Created Before
+        description: Only jobs created before this time, which is left out. ISO 8601, for example 2026-11-17T00:00:00Z.
+          A time without an offset is read as UTC. With created_after, a range that starts after it ends is refused.
       - name: cursor
         in: query
         required: false
@@ -4374,6 +4408,147 @@ paths:
         agent_key_allowed: true
       description: 'No API key: the `exp` and `sig` query values come from the signed URL the API minted. The link
         lives 72 hours.'
+  /v1/records/faxes.csv:
+    get:
+      tags:
+      - organizations
+      summary: 'The fax history as CSV: every fax sent and received in the range'
+      description: 'One line per fax of the key''s environment, sent and received, oldest first. A sent fax counts
+        by when it was created and a received one by when it arrived. The lines carry what each fax cost the wallet,
+        never the document or its text. A range of more than 20000 lines answers 422: choose fewer days. Needs the
+        scopes fax:read and inbox:read.'
+      operationId: get_fax_history_csv
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: First UTC day, YYYY-MM-DD, included.
+          title: From
+        description: First UTC day, YYYY-MM-DD, included.
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Last UTC day, YYYY-MM-DD, included.
+          title: To
+        description: Last UTC day, YYYY-MM-DD, included.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: error.code is workspace_required while the organization's Agent workspace plan is not active
+            and ended more than 30 days ago, or never started. error.details.ended_at is when it ended and error.details.closed_at
+            when the export closed. scope_missing names a scope the credential lacks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: fax:read
+      x-llm:
+        scope: fax:read
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: true
+        hint: Needs inbox:read as well as fax:read. The answer is CSV text. Without the Agent workspace plan it
+          is 403 workspace_required.
+  /v1/records/audit.csv:
+    get:
+      tags:
+      - organizations
+      summary: 'The audit trail as CSV: every action on the organization in the range'
+      description: 'One line per audit row of the organization, oldest first: when, who (actor and a label), what
+        (action), on what (resource_type and resource_id) and the row''s data as JSON. Never a document''s content.
+        A range of more than 20000 lines answers 422: choose fewer days. Needs the scope org:admin, which an owner
+        has. An agent is refused.'
+      operationId: get_audit_csv
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: First UTC day, YYYY-MM-DD, included.
+          title: From
+        description: First UTC day, YYYY-MM-DD, included.
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Last UTC day, YYYY-MM-DD, included.
+          title: To
+        description: Last UTC day, YYYY-MM-DD, included.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: error.code is workspace_required while the organization's Agent workspace plan is not active
+            and ended more than 30 days ago, or never started. error.details.ended_at is when it ended and error.details.closed_at
+            when the export closed. scope_missing names a scope the credential lacks, and an agent gets agent_forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          description: Not an id of this organization, or it was deleted (not_found).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      security:
+      - bearerAuth: []
+      - apiKeyHeader: []
+      x-required-scope: org:admin
+      x-llm:
+        scope: org:admin
+        mutating: false
+        idempotency_key: false
+        agent_key_allowed: false
+        hint: The answer is CSV text. Without the Agent workspace plan it is 403 workspace_required.
   /v1/members:
     get:
       tags:
@@ -8280,6 +8455,9 @@ paths:
             - expired
             - refused
             - settle_failed
+            - refunding
+            - refunded
+            - canceled
             type: string
           - type: 'null'
           title: Status
@@ -10433,12 +10611,16 @@ components:
           title: Extraction Pricing
           description: What POST /v1/extractions charges, in micro-units. page_micro is for every page read. escalated_page_micro
             is added for a page the stronger model reads again. max_pages is the most pages one extraction reads.
-            Sandbox extractions are free.
+            With a test key, extractions are free.
         limits:
           additionalProperties:
             type: integer
           type: object
           title: Limits
+          description: 'requests_per_minute is the limit of the calling credential: 3000 while the organization''s
+            Agent workspace is active, 600 otherwise. The RateLimit-Limit header of every answer says the same.
+            The other keys are the life of a quote and of a download link in seconds, and the largest HTML document
+            in bytes.'
         one_time:
           additionalProperties: true
           type: object
@@ -12077,7 +12259,7 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
-          description: What the received pages were charged, in micro-USD. 0 on the sandbox.
+          description: What the received pages were charged, in micro-USD. 0 in test.
           default: 0
         note:
           anyOf:
@@ -12175,7 +12357,7 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
-          description: What the received pages were charged, in micro-USD. 0 on the sandbox.
+          description: What the received pages were charged, in micro-USD. 0 in test.
           default: 0
         note:
           anyOf:
@@ -12317,7 +12499,7 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
-          description: What the received pages were charged, in micro-USD. 0 on the sandbox.
+          description: What the received pages were charged, in micro-USD. 0 in test.
           default: 0
         note:
           anyOf:
@@ -12927,6 +13109,13 @@ components:
         currency:
           type: string
           title: Currency
+        included_with_workspace:
+          type: boolean
+          title: Included With Workspace
+          description: 'True while the organization''s Agent workspace pays this number''s monthly charge: the oldest
+            live local number, pending or active, while the plan is active. Its renewals then take nothing from
+            the wallet. When the plan ends, the next renewal charges monthly_micro.'
+          default: false
         order_id:
           anyOf:
           - type: string
@@ -13036,7 +13225,8 @@ components:
         first_month_hold_micro:
           type: integer
           title: First Month Hold Micro
-          description: Held now, captured when the number activates.
+          description: 'Held now, captured when the number activates. 0 for a test number, and 0 when the Agent
+            workspace pays the first month: the number''s included_with_workspace is then true.'
         currency:
           type: string
           title: Currency
@@ -13342,6 +13532,9 @@ components:
           - expired
           - refused
           - settle_failed
+          - refunding
+          - refunded
+          - canceled
           title: Status
         to:
           type: string
@@ -13590,6 +13783,9 @@ components:
             - expired
             - refused
             - settle_failed
+            - refunding
+            - refunded
+            - canceled
           - type: 'null'
           title: Status
         amount_micro:
@@ -13682,6 +13878,9 @@ components:
           - expired
           - refused
           - settle_failed
+          - refunding
+          - refunded
+          - canceled
           title: Status
         next:
           type: string
@@ -13769,6 +13968,12 @@ components:
           title: Refunded Micro
           description: What was refunded to the card after the charge, in micro-units, as the ledger holds it. Zero
             when nothing was refunded. captured_micro stays what was charged.
+          default: 0
+        refund_pending_micro:
+          type: integer
+          title: Refund Pending Micro
+          description: A refund on its way to the card that the payment provider has not confirmed yet, in micro-units,
+            while the order is refunding. Zero otherwise.
           default: 0
         card:
           anyOf:
@@ -13929,7 +14134,9 @@ components:
         ``confirm`` (click the mailed link), ``wait`` (read again later) or ``done``. Money is integer
         micro-USD. The field ``captured_micro`` is what the card was charged, written only once the payment
         provider confirmed it. The field ``fax`` is the fax job once the order was released, with the
-        carrier's evidence once it has any.
+        carrier's evidence once it has any. Three statuses come from a person at Fax for Agents: ``refunding``
+        (a refund is on its way to the card), ``refunded`` (the whole charge went back) and ``canceled`` (the
+        order was canceled and the hold on the card released, nothing charged).
     OneTimeOrderCreated:
       properties:
         id:
@@ -13950,6 +14157,9 @@ components:
           - expired
           - refused
           - settle_failed
+          - refunding
+          - refunded
+          - canceled
           title: Status
         next:
           type: string
@@ -14037,6 +14247,12 @@ components:
           title: Refunded Micro
           description: What was refunded to the card after the charge, in micro-units, as the ledger holds it. Zero
             when nothing was refunded. captured_micro stays what was charged.
+          default: 0
+        refund_pending_micro:
+          type: integer
+          title: Refund Pending Micro
+          description: A refund on its way to the card that the payment provider has not confirmed yet, in micro-units,
+            while the order is refunding. Zero otherwise.
           default: 0
         card:
           anyOf:
@@ -14671,7 +14887,8 @@ components:
           - type: 'null'
           title: Approval Required
           description: 'What a send of this plan by that caller would need: true when a person has to approve it.
-            false when a policy allows it, and for a test send by a caller no policy binds.'
+            false when a policy allows it, and for a test send by a caller no policy binds. It is false for a signed-in
+            owner''s own live send too, which needs no approval.'
       additionalProperties: true
       type: object
       required:
@@ -15183,6 +15400,16 @@ components:
         amount_micro:
           type: integer
           title: Amount Micro
+        live_amount_micro:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Live Amount Micro
+          description: What the same fax costs with a live key, in micro-units. It is the billable pages at the
+            live rate of the destination, priced by the rule a live quote uses. A test quote is free (amount_micro
+            0), and this field says what the fax would cost live. On a live quote it equals amount_micro. Null when
+            the rate card in force is not the one the quote was priced on (price_version) or no longer serves the
+            destination.
         currency:
           type: string
           title: Currency
@@ -15296,6 +15523,7 @@ components:
         cover_pages: 0
         billable_pages: 2
         amount_micro: 0
+        live_amount_micro: 78000
         currency: USD
         price_version: launch-v3
         per_page_micro: 0
@@ -16053,6 +16281,8 @@ components:
         workspace:
           type: boolean
           title: Workspace
+        plan:
+          $ref: '#/components/schemas/WorkspacePlan'
         next_cursor:
           anyOf:
           - type: string
@@ -16719,6 +16949,93 @@ components:
         created_at: '2026-11-14T19:58:39.486Z'
         updated_at: '2026-11-14T19:58:39.486Z'
         secret: whsec_...
+    WorkspacePlan:
+      properties:
+        active:
+          type: boolean
+          title: Active
+          description: 'The plan is active: a subscription is active, trialing or past due.'
+        credit_micro:
+          type: integer
+          title: Credit Micro
+          description: The fax credit each paid invoice of the plan adds to the live wallet.
+        records_keep_days:
+          type: integer
+          title: Records Keep Days
+          description: How long live documents and received faxes are kept while the plan is active.
+        document_keep_days:
+          type: integer
+          title: Document Keep Days
+          description: How long a document is kept without the plan.
+        inbox_keep_days:
+          type: integer
+          title: Inbox Keep Days
+          description: How long a received fax is kept without the plan.
+        requests_per_minute:
+          type: integer
+          title: Requests Per Minute
+          description: The request limit of each credential of the organization now.
+        plan_requests_per_minute:
+          type: integer
+          title: Plan Requests Per Minute
+          description: The request limit of each credential while the plan is active.
+        standard_requests_per_minute:
+          type: integer
+          title: Standard Requests Per Minute
+          description: The request limit of each credential without it.
+        included_numbers:
+          type: integer
+          title: Included Numbers
+          description: Local numbers whose monthly charge the plan pays.
+        included_number_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Included Number Id
+          description: 'The number the plan pays for now: the oldest live local number, while the plan is active.'
+        included_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Included Number
+          description: That number, E.164.
+        ended_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ended At
+          description: When the plan last ended. Null while it is active or if it never was.
+        cleanup_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cleanup At
+          description: When records older than the standard time (30 days for a document, 90 for a received fax)
+            are deleted after the plan ended. Null while the plan is active.
+        export_open:
+          type: boolean
+          title: Export Open
+          description: 'GET /v1/records/faxes.csv and /v1/records/audit.csv answer: while the plan is active and
+            until cleanup_at.'
+      additionalProperties: true
+      type: object
+      required:
+      - active
+      - credit_micro
+      - records_keep_days
+      - document_keep_days
+      - inbox_keep_days
+      - requests_per_minute
+      - plan_requests_per_minute
+      - standard_requests_per_minute
+      - included_numbers
+      - included_number_id
+      - included_number
+      - ended_at
+      - cleanup_at
+      - export_open
+      title: WorkspacePlan
+      description: What the Agent workspace gives and where the organization stands with it.
     InsufficientBalance:
       title: InsufficientBalance
       description: The error envelope of 402 insufficient_balance, with its details written out.

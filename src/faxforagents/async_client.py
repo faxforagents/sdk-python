@@ -272,7 +272,10 @@ class Quotes(_Resource):
     ) -> m.Quote:
         """The exact price of one document to one E.164 destination, valid ten minutes. Scope: fax:quote.
 
-        ``quality`` picks the resolution: standard, fine (the default), superfine or ultra. Same price."""
+        ``quality`` picks the resolution: standard, fine (the default), superfine or ultra. Same price.
+
+        A test quote is free, and ``live_amount_micro`` says what the same fax costs with a live key. It is
+        ``None`` when the rate card changed since the quote, or from a server older than API 1.21.0."""
         body: dict[str, Any] = {"document_id": document_id, "to": to, "from": from_, "cover": cover}
         if quality is not None:
             body["quality"] = quality
@@ -310,6 +313,8 @@ class Faxes(_Resource):
         state: str | None = None,
         q: str | None = None,
         idempotency_key: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
         cursor: str | None = None,
         limit: int | None = None,
     ) -> m.FaxJobPage:
@@ -320,21 +325,41 @@ class Faxes(_Resource):
 
         ``idempotency_key`` finds the send made with that Idempotency-Key. It is a filter here, not a
         header. An empty result does not prove no fax was sent.
+
+        ``created_after`` and ``created_before`` keep the jobs created in a time range. The start is
+        included and the end is left out. Both are ISO 8601, such as ``2026-11-16T00:00:00Z``, and a time
+        without an offset is read as UTC. A start after the end raises ``InvalidRequestError``. Every
+        filter combines with the others. Needs API 1.21.0.
         """
         params = {
             "state": state,
             "q": q,
             "idempotency_key": idempotency_key,
+            "created_after": created_after,
+            "created_before": created_before,
             "cursor": cursor,
             "limit": limit,
         }
         return await self._h.request("GET", "/v1/faxes", model=m.FaxJobPage, params=params)
 
     def iter(
-        self, *, state: str | None = None, q: str | None = None, limit: int | None = None
+        self,
+        *,
+        state: str | None = None,
+        q: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        limit: int | None = None,
     ) -> AsyncIterator[m.FaxJob]:
         """Every fax job that matches, following next_cursor."""
-        return apaginate(self.list, {"state": state, "q": q, "limit": limit})
+        filters = {
+            "state": state,
+            "q": q,
+            "created_after": created_after,
+            "created_before": created_before,
+            "limit": limit,
+        }
+        return apaginate(self.list, filters)
 
     async def get(self, fax_id: str) -> m.FaxJob:
         """The job with its evidence once delivered or partial. Scope: fax:read."""
@@ -716,7 +741,11 @@ class Billing(_Resource):
         )
 
     async def list_subscriptions(self) -> m.SubscriptionList:
-        """Subscriptions and the workspace entitlement. Scope: billing:read."""
+        """Subscriptions and the workspace entitlement. Scope: billing:read.
+
+        ``plan`` says what the Agent workspace gives and where the organization stands with it. It names
+        the request limit, the included number, how long records are kept and whether the records export
+        is open. It is ``None`` from a server older than API 1.21.0."""
         return await self._h.request("GET", "/v1/subscriptions", model=m.SubscriptionList)
 
     async def create_portal_session(self, *, idempotency_key: str | None = None) -> m.PortalSession:
@@ -1505,6 +1534,30 @@ class Organizations(_Resource):
         )
         return bytes(data)
 
+    async def fax_history_csv(self, *, from_: str | None = None, to: str | None = None) -> str:
+        """The fax history as CSV text: one line per fax of this key's environment, sent and received,
+        oldest first. Each line says what the fax cost, never what the document says.
+        Scope: fax:read and inbox:read.
+
+        ``from_`` and ``to`` are UTC days, YYYY-MM-DD, both included. A range of more than 20000 lines
+        raises ``InvalidRequestError``: ask for fewer days. The export comes with the Agent workspace plan.
+        Without the plan, or more than 30 days after it ended, it raises ``ScopeError`` with the code
+        ``workspace_required``. Needs API 1.21.0."""
+        data = await self._h.request("GET", "/v1/records/faxes.csv", params={"from": from_, "to": to})
+        return bytes(data).decode("utf-8")
+
+    async def audit_csv(self, *, from_: str | None = None, to: str | None = None) -> str:
+        """The audit trail as CSV text: one line per audit row of the organization, oldest first. It
+        names who did what to which resource, never a document's content.
+        Scope: org:admin, never an agent key.
+
+        ``from_`` and ``to`` are UTC days, YYYY-MM-DD, both included. A range of more than 20000 lines
+        raises ``InvalidRequestError``: ask for fewer days. The export comes with the Agent workspace plan.
+        Without the plan, or more than 30 days after it ended, it raises ``ScopeError`` with the code
+        ``workspace_required``. Needs API 1.21.0."""
+        data = await self._h.request("GET", "/v1/records/audit.csv", params={"from": from_, "to": to})
+        return bytes(data).decode("utf-8")
+
 
 class Members(_Resource):
     async def list(self) -> m.MemberList:
@@ -1763,7 +1816,12 @@ class OneTimeSends(_Resource):
     async def get(self, order_id: str, *, order_token: str | None = None) -> m.OneTimeOrder:
         """The order: its status, the step that is waiting in ``next``, and the fax once released.
 
-        Read it with a key of the order's organization (scope fax:read) or with ``order_token``."""
+        Read it with a key of the order's organization (scope fax:read) or with ``order_token``.
+
+        A person at Fax for Agents can refund an order or release the hold on its card. The order then
+        reads ``refunding`` with ``next`` ``wait``, and ``refunded`` once the whole charge went back. It
+        reads ``canceled`` when the hold was released and nothing was charged. ``refund_pending_micro`` is
+        a refund the payment provider has not confirmed yet. These statuses need API 1.21.0."""
         return await self._h.request(
             "GET", f"/v1/one-time-sends/{order_id}", model=m.OneTimeOrder, headers=token_header(order_token)
         )

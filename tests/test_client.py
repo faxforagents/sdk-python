@@ -20,6 +20,7 @@ from faxforagents import (
     RateLimitedError,
     ScopeError,
     ServerError,
+    models,
 )
 from tests.conftest import (
     BASE,
@@ -1122,3 +1123,132 @@ def test_a_delivery_to_a_deleted_webhook_is_not_replayed(client: Client, api: re
         client.webhooks.replay_delivery("dlv_1")
     assert exc.value.code == "conflict" and exc.value.details == details
     assert len(replay.calls) == 1
+
+
+def test_the_fax_list_takes_a_created_range(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: created_after is included and created_before left out. A reversed range answers 422."""
+    later = fax_job(id="fax_" + "9" * 32)
+    route = api.get("/v1/faxes")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [fax_job()], "next_cursor": "c2"}),
+        httpx.Response(200, json={"items": [fax_job()], "next_cursor": "c2"}),
+        httpx.Response(200, json={"items": [later], "next_cursor": None}),
+        httpx.Response(422, json=error("invalid_request", "created_after is after created_before")),
+    ]
+    page = client.faxes.list(
+        created_after="2026-11-16T00:00:00Z", created_before="2026-11-17T00:00:00Z", state="delivered"
+    )
+    assert page.next_cursor == "c2"
+    assert dict(route.calls[0].request.url.params) == {
+        "state": "delivered",
+        "created_after": "2026-11-16T00:00:00Z",
+        "created_before": "2026-11-17T00:00:00Z",
+    }
+    ids = [job.id for job in client.faxes.iter(created_after="2026-11-16T00:00:00Z")]
+    assert ids == [fax_job()["id"], later["id"]]
+    assert dict(route.calls[1].request.url.params) == {"created_after": "2026-11-16T00:00:00Z"}
+    assert dict(route.calls[2].request.url.params) == {
+        "created_after": "2026-11-16T00:00:00Z",
+        "cursor": "c2",
+    }
+    with pytest.raises(InvalidRequestError) as exc:
+        client.faxes.list(created_after="2026-11-17T00:00:00Z", created_before="2026-11-16T00:00:00Z")
+    assert exc.value.status == 422 and exc.value.code == "invalid_request"
+
+
+def test_a_test_quote_names_its_live_price(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: a test quote is free and live_amount_micro is what the same fax costs live."""
+    route = api.post("/v1/fax-quotes")
+    older = quote()
+    route.side_effect = [
+        httpx.Response(201, json=quote(price_version="launch-v3", billable_pages=2, live_amount_micro=78000)),
+        httpx.Response(201, json=quote(live_amount_micro=None)),
+        httpx.Response(201, json=older),
+    ]
+    priced = client.quotes.create(document_id="doc_" + "2" * 32, to="+15550000001")
+    assert priced.amount_micro == 0 and priced.live_amount_micro == 78000
+    unknown = client.quotes.create(document_id="doc_" + "2" * 32, to="+15550000001")
+    assert unknown.live_amount_micro is None
+    assert "live_amount_micro" not in older
+    assert client.quotes.create(document_id="doc_" + "2" * 32, to="+15550000001").live_amount_micro is None
+
+
+def test_the_records_export_is_csv_text(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: the fax history and the audit trail of the Agent workspace plan, as CSV."""
+    faxes = api.get("/v1/records/faxes.csv").respond(
+        200,
+        content=b"direction,id,created_at\noutbound,fax_1,2026-11-16T09:00:00Z\n",
+        headers={"content-type": "text/csv; charset=utf-8"},
+    )
+    text = client.organizations.fax_history_csv(from_="2026-11-01", to="2026-11-16")
+    assert text.splitlines() == ["direction,id,created_at", "outbound,fax_1,2026-11-16T09:00:00Z"]
+    sent = faxes.calls.last.request
+    assert dict(sent.url.params) == {"from": "2026-11-01", "to": "2026-11-16"}
+    assert sent.method == "GET" and "idempotency-key" not in sent.headers
+    audit = api.get("/v1/records/audit.csv").respond(
+        200,
+        content="created_at,actor_label\n2026-11-16,Dana Ö\n".encode(),
+        headers={"content-type": "text/csv"},
+    )
+    assert client.organizations.audit_csv() == "created_at,actor_label\n2026-11-16,Dana Ö\n"
+    assert audit.calls.last.request.url.query == b""
+
+
+def test_the_records_export_needs_the_workspace_plan(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: without the plan, or 30 days after it ended, the export answers 403 workspace_required."""
+    details = {"ended_at": "2026-10-01T00:00:00Z", "closed_at": "2026-10-31T00:00:00Z"}
+    api.get("/v1/records/faxes.csv").respond(403, json=error("workspace_required", details=details))
+    with pytest.raises(ScopeError) as exc:
+        client.organizations.fax_history_csv(from_="2026-09-01")
+    assert exc.value.code == "workspace_required" and exc.value.details == details
+    api.get("/v1/records/audit.csv").respond(403, json=error("scope_missing", details={"scope": "org:admin"}))
+    with pytest.raises(ScopeError) as missing:
+        client.organizations.audit_csv(to="2026-11-16")
+    assert missing.value.code == "scope_missing" and missing.value.details == {"scope": "org:admin"}
+
+
+def workspace_plan(**over: object) -> dict[str, object]:
+    return {
+        "active": True,
+        "credit_micro": 10_000_000,
+        "records_keep_days": 365,
+        "document_keep_days": 30,
+        "inbox_keep_days": 90,
+        "requests_per_minute": 3000,
+        "plan_requests_per_minute": 3000,
+        "standard_requests_per_minute": 600,
+        "included_numbers": 1,
+        "included_number_id": "num_1",
+        "included_number": "+15550001001",
+        "ended_at": None,
+        "cleanup_at": None,
+        "export_open": True,
+        **over,
+    }
+
+
+def test_the_subscription_list_carries_the_workspace_plan(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: plan says what the Agent workspace gives. An older server sends no plan."""
+    route = api.get("/v1/subscriptions")
+    route.side_effect = [
+        httpx.Response(200, json={"items": [], "workspace": True, "plan": workspace_plan()}),
+        httpx.Response(200, json={"items": [], "workspace": False}),
+    ]
+    listed = client.billing.list_subscriptions()
+    assert listed.plan is not None and listed.plan.export_open is True
+    assert listed.plan.requests_per_minute == 3000 and listed.plan.standard_requests_per_minute == 600
+    assert listed.plan.included_number_id == "num_1" and listed.plan.ended_at is None
+    assert client.billing.list_subscriptions().plan is None
+    with pytest.raises(ValueError):
+        models.WorkspacePlan.model_validate({k: v for k, v in workspace_plan().items() if k != "export_open"})
+
+
+def test_the_number_the_workspace_pays_for(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: included_with_workspace marks the number whose monthly charge the plan pays."""
+    route = api.get("/v1/numbers/num_1")
+    route.side_effect = [
+        httpx.Response(200, json=number(included_with_workspace=True)),
+        httpx.Response(200, json=number()),
+    ]
+    assert client.numbers.get("num_1").included_with_workspace is True
+    assert client.numbers.get("num_1").included_with_workspace is False

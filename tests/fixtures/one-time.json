@@ -71,6 +71,7 @@
       "amount_micro": 2490000,
       "captured_micro": 0,
       "refunded_micro": 0,
+      "refund_pending_micro": 0,
       "card": null,
       "checkout_url": null,
       "checkout_expires_at": null,
@@ -129,6 +130,7 @@
       "amount_micro": 2490000,
       "captured_micro": 0,
       "refunded_micro": 0,
+      "refund_pending_micro": 0,
       "card": null,
       "checkout_url": null,
       "checkout_expires_at": null,
@@ -185,6 +187,7 @@
       "amount_micro": 2490000,
       "captured_micro": 0,
       "refunded_micro": 0,
+      "refund_pending_micro": 0,
       "card": null,
       "checkout_url": "https://checkout.example.test/c/pay/cs_test_1",
       "checkout_expires_at": "2026-11-12T09:31:00Z",
@@ -241,6 +244,7 @@
       "amount_micro": 2490000,
       "captured_micro": 0,
       "refunded_micro": 0,
+      "refund_pending_micro": 0,
       "card": {
         "last4": "4242",
         "brand": "visa"
@@ -300,6 +304,7 @@
       "amount_micro": 2490000,
       "captured_micro": 2490000,
       "refunded_micro": 0,
+      "refund_pending_micro": 0,
       "card": {
         "last4": "4242",
         "brand": "visa"
@@ -538,6 +543,7 @@
           "amount_micro": 2490000,
           "captured_micro": 2490000,
           "refunded_micro": 0,
+          "refund_pending_micro": 0,
           "card": {
             "last4": "4242",
             "brand": "visa"
