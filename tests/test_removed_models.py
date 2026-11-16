@@ -123,7 +123,7 @@ def test_a_spec_that_carries_them_again_generates_the_same_module() -> None:
     expected = gen.render(spec)
     again = copy.deepcopy(spec)
     for name in REMOVED:
-        # Like the admin schemas, each points at a model the clients use. Nothing points at it.
+        # Each points at a model the clients use, as Accepted did, and nothing points at it.
         again["components"]["schemas"][name] = {
             "type": "object",
             "properties": {"organization": {"$ref": "#/components/schemas/OrganizationSummary"}},
