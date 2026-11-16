@@ -2,11 +2,17 @@
 """Generate ``src/faxforagents/models.py`` (pydantic v2) from ``spec/openapi.yaml``.
 
 The spec is the public document of https://github.com/faxforagents/openapi, copied into ``spec/`` so
-the build is hermetic. Every ``components.schemas`` entry becomes a ``BaseModel``. Response models
-allow extra fields (the API adds fields without a major version). Request models forbid them, as the
-server does (``additionalProperties: false``). A field named ``from``, or one that is an attribute of
-pydantic's BaseModel such as ``schema``, is ``from_`` or ``schema_`` with the alias ``from`` or
-``schema``. Nullable fields are ``X | None``. Enums are ``Literal``.
+the build is hermetic. Every ``components.schemas`` entry that an operation reaches becomes a
+``BaseModel``. An operation reaches a schema through its parameters, request body and responses, a
+shared response in ``components.responses``, or a field of another schema it reaches. A schema that no
+operation reaches gets no model, even when a refresh of the spec brings one in from the server's own
+document. The public document holds the same set, because its curate.py keeps only what the public
+operations reach. 0.10.0 removed 70 such models, among them those of the admin console.
+
+Response models allow extra fields (the API adds fields without a major version). Request models forbid
+them, as the server does (``additionalProperties: false``). A field named ``from``, or one that is an
+attribute of pydantic's BaseModel such as ``schema``, is ``from_`` or ``schema_`` with the alias ``from``
+or ``schema``. Nullable fields are ``X | None``. Enums are ``Literal``.
 
 Usage::
 
@@ -140,6 +146,36 @@ def deps_of(schema: dict[str, Any]) -> set[str]:
     return out
 
 
+def reached_schemas(spec: dict[str, Any]) -> set[str]:
+    """The names of the schemas an operation reaches. Only these become models.
+
+    The walk starts at ``paths`` (and ``webhooks``, if the document has any) and follows every
+    ``$ref`` into ``components``: a shared response leads to its schema, a schema to the schemas of its
+    fields. A schema nothing points at is not reached, whatever it points at itself.
+    """
+    components = spec.get("components") or {}
+    seen: set[tuple[str, str]] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/components/"):
+                kind, _, name = ref[len("#/components/") :].partition("/")
+                if (kind, name) not in seen:
+                    seen.add((kind, name))
+                    walk((components.get(kind) or {}).get(name))
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(spec.get("paths") or {})
+    walk(spec.get("webhooks") or {})
+    defined = set(components.get("schemas") or {})
+    return {name for kind, name in seen if kind == "schemas" and name in defined}
+
+
 def order(schemas: dict[str, Any]) -> list[str]:
     done: list[str] = []
     seen: set[str] = set()
@@ -204,7 +240,8 @@ def render_model(name: str, schema: dict[str, Any]) -> str:
 
 
 def render(spec: dict[str, Any]) -> str:
-    schemas = spec["components"]["schemas"]
+    reached = reached_schemas(spec)
+    schemas = {name: schema for name, schema in spec["components"]["schemas"].items() if name in reached}
     names = order(schemas)
     body = "\n\n".join(render_model(n, schemas[n]) for n in names)
     all_names = ", ".join(f'"{n}"' for n in names)
@@ -223,6 +260,10 @@ def main() -> int:
     args = ap.parse_args()
     spec = yaml.safe_load(SPEC.read_text("utf-8"))
     text = render(spec)
+    reached = reached_schemas(spec)
+    left_out = sorted(set(spec["components"]["schemas"]) - reached)
+    if left_out:
+        print(f"no model for the schemas no operation reaches: {', '.join(left_out)}")
     if args.check:
         if not OUT.exists() or OUT.read_text("utf-8") != text:
             print("src/faxforagents/models.py is stale: run scripts/gen_models.py", file=sys.stderr)
@@ -230,7 +271,7 @@ def main() -> int:
         print("models.py is current")
         return 0
     OUT.write_text(text, "utf-8")
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(spec['components']['schemas'])} models")
+    print(f"wrote {OUT.relative_to(ROOT)}: {len(reached)} models")
     return 0
 
 

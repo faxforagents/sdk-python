@@ -78,9 +78,9 @@ The same in async form, with `AsyncClient` and `await` on every call.
   that follow `next_cursor`.
 - `documents.create(text=...)`, `markdown=...` or `html=...` renders on the server. HTML prints with
   scripts off and no network, inline CSS and `data:` images only, at most 2 MiB.
-- `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF): the
-  upload session, the signed PUT with the content type read from the filename, the sha256 check, the
-  document. An image becomes gray letter pages.
+- `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF). It covers
+  the upload session, the signed PUT with the content type read from the filename, the sha256 check and
+  the document. An image becomes gray letter pages.
 - `documents.create_upload(filename=..., size_bytes=...)` needs no `content_type`. The API reads the
   type from the filename and refuses a filename of another format at once with `unsupported_format`.
 - `billing.statement()` reads the wallet one line per event, with the balance after each line.
@@ -186,9 +186,9 @@ if req.status == "approved":
 An agent's own API key can never approve. `ffa.policies.evaluate(quote_id=...)` is a dry run that says
 whether a policy would allow the send.
 
-A key made for a connected app used over stdio, such as the Gemini CLI extension, is created with
+An API key for a connected app used over stdio, such as the Gemini CLI extension, is created with
 `connected_app=True`. The organization's auto-send setting (`ffa.policies.get_auto_send`) then binds it like
-an OAuth connection. An agent's key cannot carry the flag.
+an OAuth connection. An agent's API key cannot carry the flag.
 
 ```python
 key = ffa.identity.create_api_key("gemini", scopes=["fax:send"], connected_app=True)
@@ -315,13 +315,16 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.11 and keeps the schemas of the earlier live documents.
-The two validation error schemas are the exception. 0.5.0 removed them because the server never sent that shape.
+`spec/openapi.yaml` follows the public document at API version 1.20.11. It has the same 163 operations and no schema that document lacks.
+It also declares fields a route returns beyond the public schemas, in `InboxItemSummary` and `ExtractionPage`.
+0.5.0 removed the two validation error schemas, because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
 0.8.0 replaced five fields it had declared itself with the public ones, such as `Quote.policy_evaluation`.
 0.9.0 leaves `Delivery.webhook_deleted` optional, where the public document requires it.
-It also retains earlier public model names and route-documented response additions.
-To refresh it, merge the live schemas while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
+0.10.0 removed the 70 schemas of earlier server documents that no operation reaches, such as those of the admin console.
+`scripts/gen_models.py` writes a model only for a schema an operation reaches, through its paths, a shared response or a field.
+If a refresh brings in a schema that no operation reaches, it gets no model and `tests/test_removed_models.py` fails.
+To refresh it, merge the public document while preserving existing declarations, then run `uv run python scripts/gen_models.py`.
 Keep new response fields optional so older payloads and existing callers remain valid.
 The schema drift test compares every saved schema property with the generated declarations without network access.
 

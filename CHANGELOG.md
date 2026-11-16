@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.10.0 (2026-11-16)
+
+Follows API 1.20.11, as 0.9.1 did. The saved spec has 163 operations and the models are regenerated from it.
+No client method, argument or return type changed. Every model a method takes or returns is kept.
+
+### Removed
+
+70 models are gone from `faxforagents.models`, which now has 174. No method of `Client` or `AsyncClient` takes or returns them, directly or in a field.
+The public document of API 1.20.11 does not define them. They came from the server's own document in 0.2.2 and 0.2.3.
+Under 0.x a minor release can break imports, and this one does. Code that imports one of them has to drop the import. Nothing replaces them.
+
+- The admin console under `/v1/admin`, 43 models: `AbuseReview`, `AbuseReviewCreate`, `AbuseReviewPage`, `AbuseReviewPatch`, `Adjustment`, `AdjustmentApply`, `AdjustmentCreate`, `AdjustmentPage`, `AdminAction`, `AdminBrief`, `AdminDaily`, `AdminDailyPoint`, `AdminJob`, `AdminJobPage`, `AdminOrganization`, `AdminOrganizationDetail`, `AdminOrganizationPage`, `AdminRevenue`, `AdminStats`, `AdminWhoami`, `AnalyticsJourneys`, `AnalyticsOrganization`, `AnalyticsSource`, `AnalyticsSources`, `AnalyticsUsage`, `AnalyticsWebsite`, `AuditEvent`, `AuditEventPage`, `Client`, `ClientList`, `OutboxDiscarded`, `OutboxPage`, `OutboxRow`, `ProviderHealth`, `ProviderList`, `ReconcileResult`, `ReconciliationReport`, `ReleaseResult`, `ReviewAccessAction`, `ReviewAccessCreate`, `ReviewAccessIssued`, `RouteList`, `RouteState`.
+- The dashboard sign-in under `/v1/auth`, 17 models: `Accepted`, `MagicLinkRequest`, `Passkey`, `PasskeyList`, `PasskeyLoginVerify`, `PasskeyRegisterVerify`, `Providers`, `Reauth`, `ReviewSignIn`, `Revoked`, `Sent`, `SessionInfo`, `SessionList`, `SessionOut`, `SwitchOrganization`, `UserOut`, `faxforagents__auth__schemas__Me`.
+- The OAuth consent calls under `/v1/oauth/authorizations`, 5 models: `OAuthConsent`, `OAuthConsentClient`, `OAuthConsentDecision`, `OAuthConsentOrganization`, `OAuthRedirect`.
+- The Stripe and Telnyx receivers under `/webhooks`, 2 models: `TelnyxAck`, `WebhookAck`.
+- The server's module-qualified names for `InboxItem`, `InboxItemSummary` and `Me`, 3 models: `faxforagents__api__routes__inbox__InboxItem`, `faxforagents__api__schemas__InboxItem`, `faxforagents__api__schemas__Me`. The plain names stay.
+
+`faxforagents.models.Client` described an OAuth client in the admin console. `faxforagents.Client`, the client of this package, is not affected.
+
+`scripts/gen_models.py` now writes a model only for a schema that an operation reaches. The public document is curated by the same rule.
+A refresh of the spec that brings one of these schemas back still leaves it out of `models.py`.
+`tests/test_removed_models.py` fails when one of the 70 is back, or when the saved spec holds a schema that no operation reaches.
+
 ## 0.9.1 (2026-11-16)
 
 Follows API 1.20.11. The saved spec has 163 operations and the models are regenerated from it.
@@ -181,7 +204,7 @@ The package metadata links to the pricing page and the dashboard. The README nam
 
 ## 0.3.2 (2026-11-10)
 
-`identity.create_api_key` takes `connected_app` on both clients. A key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.
+`identity.create_api_key` takes `connected_app` on both clients. An API key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.
 The field is sent only when given, so existing calls send the same body. Needs API 1.12.0.
 
 The saved spec follows the public document at API 1.13.2. No operation or schema changed.
@@ -205,7 +228,7 @@ Existing model names, fields and optionality are kept.
 
 ## 0.2.4 (2026-11-09)
 
-`quotes.create` takes `quality`: standard, fine (the default), superfine or ultra. `Quote` and `FaxJob` carry it. The CLI has `--quality`. Needs API 1.11.0; older servers refuse the field.
+`quotes.create` takes `quality`: standard, fine (the default), superfine or ultra. `Quote` and `FaxJob` carry it. The CLI has `--quality`. Needs API 1.11.0. Older servers refuse the field.
 
 ## 0.2.3 (2026-11-02)
 

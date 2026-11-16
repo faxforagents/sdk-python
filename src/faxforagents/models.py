@@ -20,175 +20,6 @@ class _Request(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
-class AbuseReview(_Response):
-    id: str
-    org_id: str
-    key_id: str | None = None
-    status: Literal["open", "resolved"]
-    action: Literal["none", "suspended"]
-    opened_by: str
-
-
-class AbuseReviewCreate(_Request):
-    org_id: str
-    key_id: str | None = None
-    reason: str = Field(..., description="Why: recorded on the audit row")
-    suspend: bool = Field(False, description="Suspend sends for the organization or key at once")
-
-
-class AbuseReviewPage(_Response):
-    items: list[AbuseReview]
-    next_cursor: str | None = None
-
-
-class AbuseReviewPatch(_Request):
-    action: Literal["suspend", "unsuspend", "resolve"]
-    reason: str = Field(..., description="Why: recorded on the audit row")
-
-
-class OrganizationSummary(_Response):
-    id: str
-    name: str
-    role: Literal["owner", "admin", "member", "viewer"]
-    suspended_at: str | None = Field(None, description="Set while a review has paused sending for the whole organization. A send answers `account_suspended` until it is cleared. Reads keep working.")
-
-
-class Accepted(_Response):
-    organization: OrganizationSummary
-
-
-class Adjustment(_Response):
-    id: str
-    org_id: str
-    environment: str
-    direction: str
-    amount_micro: int
-    status: str
-    proposed_by: str
-    applied_by: str | None = None
-    txn_id: str | None = None
-
-
-class AdjustmentApply(_Request):
-    reason: str = Field(..., description="Why: recorded on the audit row")
-    confirm: bool = Field(False, description="Required when the proposer applies their own adjustment")
-
-
-class AdjustmentCreate(_Request):
-    org_id: str
-    environment: Literal["live", "test"] = "live"
-    direction: Literal["credit", "debit"]
-    amount_micro: int = Field(..., description="Integer micro-USD; at most 10,000.00")
-    reason: str = Field(..., description="Why: recorded on the audit row")
-
-
-class AdjustmentPage(_Response):
-    items: list[Adjustment]
-    next_cursor: str | None = None
-
-
-class AdminAction(_Request):
-    reason: str = Field(..., description="Why: recorded on the audit row")
-
-
-class AdminBrief(_Response):
-    utc_day: str | None = None
-    text: str | None = None
-    posted_at: str | None = None
-    channel: str | None = None
-    status: Literal["posted", "failed", "gave_up"] | None = None
-    attempts: int = 0
-    local_day: str | None = None
-    attempted_at: str | None = None
-    attempt_utc_day: str | None = None
-    retry_after_s: int = 600
-    waiting_day: str | None = None
-
-
-class AdminDailyPoint(_Response):
-    day: str
-    environment: str
-    dims: dict[str, Any]
-    value_num: int | None = None
-    value_json: Any | None = None
-    computed_at: str
-
-
-class AdminDaily(_Response):
-    metric: str
-    description: str
-    days: int
-    items: list[AdminDailyPoint]
-
-
-class AdminJob(_Response):
-    id: str
-    org_id: str
-    state: str
-    route: str
-    environment: Literal["live", "test"]
-    age_s: int
-
-
-class AdminJobPage(_Response):
-    items: list[AdminJob]
-    next_cursor: str | None = None
-
-
-class AdminOrganization(_Response):
-    id: str
-    name: str
-    suspended_at: str | None = None
-    internal: bool = False
-    balances_micro: dict[str, Any]
-    counts: dict[str, int]
-
-
-class AdminOrganizationDetail(_Response):
-    organization: dict[str, Any]
-    members: list[dict[str, Any]]
-    keys: list[dict[str, Any]]
-    recent_jobs: list[dict[str, Any]]
-    ledger: dict[str, Any]
-    open_reviews: list[dict[str, Any]]
-
-
-class AdminOrganizationPage(_Response):
-    items: list[AdminOrganization]
-    next_cursor: str | None = None
-
-
-class AdminRevenue(_Response):
-    computed_at: str
-    days: int
-    captured: dict[str, Any]
-    funded: dict[str, Any]
-    refunded: dict[str, Any]
-    recurring: dict[str, Any]
-    balances_micro: dict[str, dict[str, int]]
-    by_day: list[dict[str, Any]]
-    data_age: dict[str, Any]
-    sources: list[dict[str, Any]]
-
-
-class AdminStats(_Response):
-    computed_at: str
-    jobs_by_state: dict[str, int]
-    by_environment: dict[str, Any]
-    live_sends: dict[str, Any]
-    needs_you: dict[str, Any]
-    window: dict[str, Any]
-    totals: dict[str, Any]
-    money_live_micro: dict[str, int]
-
-
-class AdminWhoami(_Response):
-    kind: Literal["user", "service", "dev"]
-    identity: str
-    actor: str
-    read_only: bool
-
-
 class ApiKey(_Response):
     id: str
     label: str
@@ -284,84 +115,6 @@ class AlreadyAllowed(_Response):
     prefixes: list[str] = Field(..., description="The listed prefixes this number's route carries.")
 
 
-class AnalyticsJourneys(_Response):
-    computed_at: str
-    days: int
-    window: dict[str, str]
-    cohort: int
-    funnel: list[dict[str, Any]]
-    leakiest: dict[str, Any] | None = None
-    doors: list[dict[str, Any]]
-    topups: dict[str, Any]
-    site: dict[str, Any]
-    organizations: list[dict[str, Any]]
-    listed: int
-
-
-class AnalyticsOrganization(_Response):
-    computed_at: str
-    days: int
-    window: dict[str, str]
-    organization: dict[str, Any]
-    steps: list[dict[str, Any]]
-    members: list[dict[str, Any]]
-    doors: list[dict[str, Any]]
-    keys: dict[str, Any]
-    jobs: dict[str, Any]
-    topups: list[dict[str, Any]]
-    inbound: dict[str, Any]
-    numbers: dict[str, Any]
-    actions: list[dict[str, Any]]
-    recent: list[dict[str, Any]]
-    usage: list[dict[str, Any]]
-    tools: list[dict[str, Any]]
-
-
-class AnalyticsSource(_Response):
-    source: str
-    label: str
-    status: str
-    missing: list[str]
-    step: int
-    error: str | None = None
-    last_pulled_at: str | None = None
-    latest_day: str | None = None
-
-
-class AnalyticsSources(_Response):
-    items: list[AnalyticsSource]
-    pull: dict[str, Any]
-
-
-class AnalyticsUsage(_Response):
-    computed_at: str
-    days: int
-    window: dict[str, str]
-    org_id: str | None = None
-    totals: dict[str, Any]
-    by_day: list[dict[str, Any]]
-    by_surface: list[dict[str, Any]]
-    by_family: list[dict[str, Any]]
-    top_organizations: list[dict[str, Any]]
-    top_keys: list[dict[str, Any]]
-    tools: dict[str, Any]
-    data_age: dict[str, Any]
-
-
-class AnalyticsWebsite(_Response):
-    computed_at: str
-    days: int
-    window: dict[str, str]
-    sources: list[AnalyticsSource]
-    search: dict[str, Any]
-    traffic: dict[str, Any]
-    site: dict[str, Any]
-    ux: dict[str, Any]
-    bing: dict[str, Any]
-    authority: dict[str, Any]
-    data_age: dict[str, Any]
-
-
 class ApiKeyCreate(_Request):
     label: str
     environment: Literal["live", "test"] = "test"
@@ -453,21 +206,6 @@ class Attempt(_Response):
 
 class AttemptPage(_Response):
     items: list[Attempt]
-
-
-class AuditEvent(_Response):
-    id: str
-    org_id: str | None = None
-    actor: str
-    action: str
-    resource_type: str
-    resource_id: str | None = None
-    created_at: str
-
-
-class AuditEventPage(_Response):
-    items: list[AuditEvent]
-    next_cursor: str | None = None
 
 
 class AutoSendSetting(_Response):
@@ -609,24 +347,6 @@ class ClassificationCreate(_Request):
     document_types: list[str]
     abstain_below: float = 0.6
     strong_model_if_below: float = 0.75
-
-
-class Client(_Response):
-    id: str
-    client_id: str
-    kind: Literal["static", "dynamic", "cimd"]
-    client_name: str | None
-    client_host: str
-    created_at: str
-    last_used_at: str | None
-    disabled_at: str | None
-    disabled_reason: str | None
-
-
-class ClientList(_Response):
-    items: list[Client]
-    next_cursor: str | None = None
-    total: int
 
 
 class Correction(_Response):
@@ -1201,11 +921,6 @@ class LedgerPage(_Response):
     next_cursor: str | None = None
 
 
-class MagicLinkRequest(_Request):
-    email: str
-    next: str | None = Field(None, description="An in-app path to open after sign-in.")
-
-
 class Me(_Response):
     org_id: str
     project_id: str
@@ -1296,39 +1011,6 @@ class NumberUpdate(_Request):
     project_id: str | None = None
     inbound_webhook_id: str | None = None
     email_pdf: bool | None = Field(None, description="Attach the PDF of each received fax to the notice mail. The mail goes to the verified address of an owner of the organization and to no other address. A PDF over 15 MiB is not attached. It needs the scope number:buy. An agent, an OAuth connection and a connected app are refused.")
-
-
-class OAuthConsentClient(_Response):
-    name: str | None = Field(..., description="The client's own name, shown as text beside the host.")
-    host: str = Field(..., description="The host the person is sending a credential to: the trust anchor.")
-    loopback: bool = Field(..., description="The redirect goes to the person's own computer (an app they started).")
-    first_seen: bool = Field(..., description="This client was registered during this request.")
-
-
-class OAuthConsentOrganization(_Response):
-    id: str
-    name: str
-    role: str
-    scopes: list[str] = Field(..., description="What the grant would carry for this organization and role.")
-
-
-class OAuthConsent(_Response):
-    id: str
-    client: OAuthConsentClient
-    redirect_host: str
-    scopes_requested: list[str]
-    organizations: list[OAuthConsentOrganization]
-    default_environment: Literal["live", "test"]
-    expires_at: str
-
-
-class OAuthConsentDecision(_Request):
-    org_id: str
-    environment: Literal["live", "test"] = "test"
-
-
-class OAuthRedirect(_Response):
-    redirect_to: str = Field(..., description="Where the browser goes next: the client's registered redirect URI.")
 
 
 class OneTimeAttempts(_Response):
@@ -1579,59 +1261,19 @@ class Organization(_Response):
     members: int
 
 
+class OrganizationSummary(_Response):
+    id: str
+    name: str
+    role: Literal["owner", "admin", "member", "viewer"]
+    suspended_at: str | None = Field(None, description="Set while a review has paused sending for the whole organization. A send answers `account_suspended` until it is cleared. Reads keep working.")
+
+
 class OrganizationList(_Response):
     items: list[OrganizationSummary]
 
 
 class OrganizationPatch(_Request):
     name: str
-
-
-class OutboxDiscarded(_Response):
-    id: str
-    discarded: bool
-
-
-class OutboxRow(_Response):
-    id: str
-    kind: str
-    status: Literal["queued", "running", "done", "failed", "dead"]
-    title: str | None = None
-    error: str | None = None
-    attempts: int
-    max_attempts: int
-    org_id: str | None = None
-    created_at: str
-    finished_at: str | None = None
-    age_s: int
-
-
-class OutboxPage(_Response):
-    items: list[OutboxRow]
-    next_cursor: str | None = None
-
-
-class Passkey(_Response):
-    id: str
-    label: str | None
-    aaguid: str | None
-    transports: list[str] | None
-    backup_eligible: bool
-    created_at: str
-    last_used_at: str | None
-
-
-class PasskeyList(_Response):
-    items: list[Passkey]
-
-
-class PasskeyLoginVerify(_Request):
-    credential: dict[str, Any]
-
-
-class PasskeyRegisterVerify(_Request):
-    credential: dict[str, Any]
-    label: str | None = None
 
 
 class PaymentReceipt(_Response):
@@ -1790,29 +1432,6 @@ class PortalSession(_Response):
     expires_at: str
 
 
-class ProviderHealth(_Response):
-    name: str
-    configured: bool
-    serves: list[str] = []
-    circuit: str
-    routes_paused: list[str]
-    breakers: list[dict[str, Any]] = []
-    last_success_at: str | None = None
-    last_failure_at: str | None = None
-    concurrency_in_use: int
-
-
-class ProviderList(_Response):
-    items: list[ProviderHealth]
-
-
-class Providers(_Response):
-    magic_link: bool = True
-    passkeys: bool = True
-    github: bool
-    google: bool
-
-
 class Quote(_Response):
     id: str
     environment: Literal["live", "test"]
@@ -1854,11 +1473,6 @@ class QuoteCreate(_Request):
     delete_after_send: bool = Field(False, description="Delete the document and the transmitted copy the moment the fax ends in delivered, partial or failed. The job, its receipt and the carrier evidence stay; they hold no document content. A fax that ends unknown keeps the document until a reconcile settles it. Default: keep the document for the retention period.")
 
 
-class Reauth(_Request):
-    method: Literal["passkey", "magic_link"]
-    credential: dict[str, Any] | None = None
-
-
 class Seller(_Response):
     """The company a receipt is issued by."""
 
@@ -1895,23 +1509,8 @@ class Receipt(_Response):
     one_time: OneTimeJob | None = Field(None, description="Set on the receipt of a fax that a one-time order paid for. It names the order, its status, the card and the amount held on the card. captured_micro in it is the amount charged, written once the payment provider confirmed the capture. For a card order read the money here. Null for a fax paid from the wallet.")
 
 
-class ReconcileResult(_Response):
-    outcome: Literal["no_provider_ref", "skipped", "poll_failed", "finalized", "retry_scheduled", "unknown", "pending"]
-    job: AdminJob
-
-
-class ReconciliationReport(_Response):
-    report: dict[str, Any] | None
-    last_day: str | None
-
-
 class ReleaseRequest(_Request):
     confirm: str | None = Field(None, description="The number itself, typed out, to confirm.")
-
-
-class ReleaseResult(_Response):
-    settlement: dict[str, Any]
-    job: AdminJob
 
 
 class Requested(_Response):
@@ -1920,48 +1519,6 @@ class Requested(_Response):
     message: str
     id: str | None = Field(None, description="The request, as `GET .../data-requests` lists it.")
     created_at: str | None = None
-
-
-class ReviewAccessAction(_Request):
-    reason: str = Field(..., description="Why: recorded on the audit row")
-
-
-class ReviewAccessCreate(_Request):
-    reason: str = Field(..., description="Why: recorded on the audit row")
-    email: str
-    label: str = "Directory review"
-    ttl_days: int = 30
-
-
-class ReviewAccessIssued(_Response):
-    id: str
-    email: str
-    label: str
-    code: str
-    expires_at: str
-
-
-class ReviewSignIn(_Request):
-    email: str
-    code: str
-
-
-class Revoked(_Response):
-    revoked: int
-
-
-class RouteState(_Response):
-    route: str
-    status: Literal["paused", "open", "breaker_open"]
-    reason: str | None = None
-    actor: str
-    updated_at: str
-    paused_at: str | None = None
-    open_until: str | None = None
-
-
-class RouteList(_Response):
-    items: list[RouteState]
 
 
 class SandboxFixture(_Response):
@@ -2017,11 +1574,6 @@ class SenderVerificationCreate(_Request):
     from_: str = Field(..., alias="from", description="A number your organization owns, E.164.")
 
 
-class Sent(_Response):
-    sent: bool
-    message: str
-
-
 class ServiceStatus(_Response):
     status: Literal["ok", "degraded"]
     version: str
@@ -2030,31 +1582,6 @@ class ServiceStatus(_Response):
     database: bool
     worker_beat_age_s: int | None = None
     status_page: str | None = None
-
-
-class SessionInfo(_Response):
-    id: str
-    auth_method: str
-    authenticated_at: str
-    fresh_until: str
-    fresh: bool
-    expires_at: str
-
-
-class SessionOut(_Response):
-    id: str
-    current: bool
-    auth_method: str
-    ip: str | None
-    user_agent: str | None
-    created_at: str
-    authenticated_at: str
-    last_seen_at: str
-    expires_at: str
-
-
-class SessionList(_Response):
-    items: list[SessionOut]
 
 
 class SignedUrl(_Response):
@@ -2115,16 +1642,6 @@ class SummaryCreate(_Request):
     max_pages: int | None = None
     strict: bool = Field(False, description="Refuse with page_limit_exceeded when the document has more pages than would be read, instead of reading the first ones and warning.")
     strong_model_if_below: float = 0.75
-
-
-class SwitchOrganization(_Request):
-    org_id: str
-
-
-class TelnyxAck(_Response):
-    received: bool
-    outcome: str
-    event_id: str | None = None
 
 
 class TopupCreate(_Request):
@@ -2218,15 +1735,6 @@ class UsageReport(_Response):
     totals: dict[str, int]
 
 
-class UserOut(_Response):
-    id: str
-    email: str
-    name: str | None
-    email_verified: bool
-    created_at: str
-    last_login_at: str | None
-
-
 class Webhook(_Response):
     id: str
     url: str
@@ -2237,11 +1745,6 @@ class Webhook(_Response):
     previous_secret_expires_at: str | None
     created_at: str
     updated_at: str
-
-
-class WebhookAck(_Response):
-    received: bool = True
-    outcome: str
 
 
 class WebhookCreate(_Request):
@@ -2274,82 +1777,7 @@ class WebhookWithSecret(_Response):
     secret: str = Field(..., description="whsec_... Shown once. Verify webhook-signature with it.")
 
 
-class faxforagents__api__routes__inbox__InboxItem(_Response):
-    id: str
-    from_: str | None = Field(None, alias="from")
-    to: str
-    pages: int
-    status: str
-    document_id: str | None
-    received_at: str
-    amount_micro: int = 0
-    note: str | None = None
-    environment: Literal["live", "test"] = "live"
-    number_id: str | None = None
-    project_id: str | None = None
-    partial_content: bool = False
-    media_status: str = "stored"
-    duration_secs: int | None = None
-    provider: str = ""
-    read_at: str | None = None
-    expires_at: str | None = None
-
-
-class faxforagents__api__schemas__InboxItem(_Response):
-    id: str
-    from_: str | None = Field(None, alias="from")
-    to: str
-    pages: int
-    status: str
-    document_id: str | None
-    received_at: str
-    amount_micro: int = 0
-    note: str | None = None
-
-
-class faxforagents__api__schemas__Me(_Response):
-    org_id: str
-    project_id: str
-    key_id: str
-    key_prefix: str
-    environment: Literal["live", "test"]
-    scopes: list[str]
-    actor: str
-
-
-class faxforagents__auth__schemas__Me(_Response):
-    user: UserOut
-    organization: OrganizationSummary | None
-    organizations: list[OrganizationSummary]
-    session: SessionInfo
-    csrf_token: str
-    passkeys: int
-    providers: Providers
-
-
 __all__ = [
-    "AbuseReview",
-    "AbuseReviewCreate",
-    "AbuseReviewPage",
-    "AbuseReviewPatch",
-    "OrganizationSummary",
-    "Accepted",
-    "Adjustment",
-    "AdjustmentApply",
-    "AdjustmentCreate",
-    "AdjustmentPage",
-    "AdminAction",
-    "AdminBrief",
-    "AdminDailyPoint",
-    "AdminDaily",
-    "AdminJob",
-    "AdminJobPage",
-    "AdminOrganization",
-    "AdminOrganizationDetail",
-    "AdminOrganizationPage",
-    "AdminRevenue",
-    "AdminStats",
-    "AdminWhoami",
     "ApiKey",
     "Agent",
     "AgentActivity",
@@ -2360,12 +1788,6 @@ __all__ = [
     "AgentList",
     "AgentUpdate",
     "AlreadyAllowed",
-    "AnalyticsJourneys",
-    "AnalyticsOrganization",
-    "AnalyticsSource",
-    "AnalyticsSources",
-    "AnalyticsUsage",
-    "AnalyticsWebsite",
     "ApiKeyCreate",
     "ApiKeyList",
     "ApiKeyWithSecret",
@@ -2376,8 +1798,6 @@ __all__ = [
     "ApprovalRequestPage",
     "Attempt",
     "AttemptPage",
-    "AuditEvent",
-    "AuditEventPage",
     "AutoSendSetting",
     "AutoSendUpdate",
     "AutoTopup",
@@ -2393,8 +1813,6 @@ __all__ = [
     "BudgetRemoved",
     "Capabilities",
     "ClassificationCreate",
-    "Client",
-    "ClientList",
     "Correction",
     "CorrectionCreate",
     "Coverage",
@@ -2447,7 +1865,6 @@ __all__ = [
     "InvoicePage",
     "LedgerEntry",
     "LedgerPage",
-    "MagicLinkRequest",
     "Me",
     "Member",
     "MemberList",
@@ -2458,11 +1875,6 @@ __all__ = [
     "NumberOrderCreate",
     "NumberOrderList",
     "NumberUpdate",
-    "OAuthConsentClient",
-    "OAuthConsentOrganization",
-    "OAuthConsent",
-    "OAuthConsentDecision",
-    "OAuthRedirect",
     "OneTimeAttempts",
     "OneTimeCheckout",
     "OneTimeQueue",
@@ -2481,15 +1893,9 @@ __all__ = [
     "OneTimeOrderCreated",
     "OneTimeOrderPage",
     "Organization",
+    "OrganizationSummary",
     "OrganizationList",
     "OrganizationPatch",
-    "OutboxDiscarded",
-    "OutboxRow",
-    "OutboxPage",
-    "Passkey",
-    "PasskeyList",
-    "PasskeyLoginVerify",
-    "PasskeyRegisterVerify",
     "PaymentReceipt",
     "PolicyCreate",
     "PolicyUsage",
@@ -2509,26 +1915,12 @@ __all__ = [
     "PortabilityCheck",
     "PortabilityCheckCreate",
     "PortalSession",
-    "ProviderHealth",
-    "ProviderList",
-    "Providers",
     "Quote",
     "QuoteCreate",
-    "Reauth",
     "Seller",
     "Receipt",
-    "ReconcileResult",
-    "ReconciliationReport",
     "ReleaseRequest",
-    "ReleaseResult",
     "Requested",
-    "ReviewAccessAction",
-    "ReviewAccessCreate",
-    "ReviewAccessIssued",
-    "ReviewSignIn",
-    "Revoked",
-    "RouteState",
-    "RouteList",
     "SandboxFixture",
     "SandboxInboundCreate",
     "SandboxReset",
@@ -2537,11 +1929,7 @@ __all__ = [
     "SchemaCreate",
     "SenderVerification",
     "SenderVerificationCreate",
-    "Sent",
     "ServiceStatus",
-    "SessionInfo",
-    "SessionOut",
-    "SessionList",
     "SignedUrl",
     "StatementLine",
     "StatementPage",
@@ -2549,8 +1937,6 @@ __all__ = [
     "SubscriptionCheckout",
     "SubscriptionList",
     "SummaryCreate",
-    "SwitchOrganization",
-    "TelnyxAck",
     "TopupCreate",
     "TopupSession",
     "TopupSessionPage",
@@ -2561,15 +1947,9 @@ __all__ = [
     "UsageExportCreate",
     "UsageItem",
     "UsageReport",
-    "UserOut",
     "Webhook",
-    "WebhookAck",
     "WebhookCreate",
     "WebhookList",
     "WebhookUpdate",
     "WebhookWithSecret",
-    "faxforagents__api__routes__inbox__InboxItem",
-    "faxforagents__api__schemas__InboxItem",
-    "faxforagents__api__schemas__Me",
-    "faxforagents__auth__schemas__Me",
 ]
