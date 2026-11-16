@@ -772,9 +772,9 @@ class Billing(_Resource):
     def list_subscriptions(self) -> m.SubscriptionList:
         """Subscriptions and the workspace entitlement. Scope: billing:read.
 
-        ``plan`` says what the Agent workspace gives and where the organization stands with it: the
-        request limit, the included number, how long records are kept and whether the records export is
-        open. It is ``None`` from a server older than API 1.21.0."""
+        ``plan`` says what the Agent workspace gives and where the organization stands with it. It names
+        the request limit, the included number, how long records are kept and whether the records export
+        is open. It is ``None`` from a server older than API 1.21.0."""
         return self._h.request("GET", "/v1/subscriptions", model=m.SubscriptionList)
 
     def create_portal_session(self, *, idempotency_key: str | None = None) -> m.PortalSession:
