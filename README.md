@@ -78,9 +78,9 @@ The same in async form, with `AsyncClient` and `await` on every call.
   that follow `next_cursor`.
 - `documents.create(text=...)`, `markdown=...` or `html=...` renders on the server. HTML prints with
   scripts off and no network, inline CSS and `data:` images only, at most 2 MiB.
-- `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF): the
-  upload session, the signed PUT with the content type read from the filename, the sha256 check, the
-  document. An image becomes gray letter pages.
+- `documents.upload(path)` runs the whole upload path for a PDF or an image (PNG, JPG, TIFF). It covers
+  the upload session, the signed PUT with the content type read from the filename, the sha256 check and
+  the document. An image becomes gray letter pages.
 - `documents.create_upload(filename=..., size_bytes=...)` needs no `content_type`. The API reads the
   type from the filename and refuses a filename of another format at once with `unsupported_format`.
 - `billing.statement()` reads the wallet one line per event, with the balance after each line.
@@ -186,9 +186,9 @@ if req.status == "approved":
 An agent's own API key can never approve. `ffa.policies.evaluate(quote_id=...)` is a dry run that says
 whether a policy would allow the send.
 
-A key made for a connected app used over stdio, such as the Gemini CLI extension, is created with
+An API key for a connected app used over stdio, such as the Gemini CLI extension, is created with
 `connected_app=True`. The organization's auto-send setting (`ffa.policies.get_auto_send`) then binds it like
-an OAuth connection. An agent's key cannot carry the flag.
+an OAuth connection. An agent's API key cannot carry the flag.
 
 ```python
 key = ffa.identity.create_api_key("gemini", scopes=["fax:send"], connected_app=True)

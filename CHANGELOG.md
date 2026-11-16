@@ -204,7 +204,7 @@ The package metadata links to the pricing page and the dashboard. The README nam
 
 ## 0.3.2 (2026-11-10)
 
-`identity.create_api_key` takes `connected_app` on both clients. A key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.
+`identity.create_api_key` takes `connected_app` on both clients. An API key made with `connected_app=True` is bound by the auto-send setting like an OAuth connection.
 The field is sent only when given, so existing calls send the same body. Needs API 1.12.0.
 
 The saved spec follows the public document at API 1.13.2. No operation or schema changed.
@@ -228,7 +228,7 @@ Existing model names, fields and optionality are kept.
 
 ## 0.2.4 (2026-11-09)
 
-`quotes.create` takes `quality`: standard, fine (the default), superfine or ultra. `Quote` and `FaxJob` carry it. The CLI has `--quality`. Needs API 1.11.0; older servers refuse the field.
+`quotes.create` takes `quality`: standard, fine (the default), superfine or ultra. `Quote` and `FaxJob` carry it. The CLI has `--quality`. Needs API 1.11.0. Older servers refuse the field.
 
 ## 0.2.3 (2026-11-02)
 
