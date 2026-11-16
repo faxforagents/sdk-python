@@ -19,6 +19,9 @@ At API 1.20.0, server revision `3c06d076f0f5cfe477c42b71857cbdda9767884e`, the n
 The extraction page loses `cost_micro`, which `ocr/service.py` no longer sends.
 At API 1.20.10, server revision `da29794e1fb66a7f1486680a08a5d16402aee435`, the top-up session gains `checkout_status` from `billing/wallet.py`.
 It is null unless a read of an open top-up asks with `check_checkout=true`.
+At API 1.21.0, server revision `a8e44c1174b926e359d9625847d4e347b98290cb`, the quote gains `live_amount_micro` from `billing/quotes.py`.
+It is null for these test quotes, priced on launch-v1 while the card in force is launch-v3.
+The number gains `included_with_workspace` from `numbers/service.py`, false for a test number.
 
 ## One-time sends (`one-time.json`)
 
@@ -28,3 +31,5 @@ The other cases follow the serializers `order_json` and `job_block` in `onetime/
 They are synthetic examples, not captured traffic: no order was created and no card was charged to make them.
 The tests add the API 1.17.0 fields (`queue`, `aup_accepted`, `status_url`, `top_up_url`) on top of these cases.
 Ids, addresses, the token and the checkout address are test values.
+At API 1.21.0, server revision `a8e44c1174b926e359d9625847d4e347b98290cb`, each order gains `refund_pending_micro` from `onetime/service.py`.
+It is 0 for an order that is not refunding.

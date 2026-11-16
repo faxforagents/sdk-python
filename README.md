@@ -88,6 +88,12 @@ The same in async form, with `AsyncClient` and `await` on every call.
   returns the same lines as CSV text.
 - `faxes.list(q=...)` finds a fax by its number or by the start of its id. `documents.list(q=...)` finds
   a document by file name, or a received fax's file by the sender's number.
+- `faxes.list(created_after=..., created_before=...)` keeps the jobs created in a time range, given in
+  ISO 8601. The start is included and the end is left out.
+- `organizations.fax_history_csv()` and `organizations.audit_csv()` return the records export of the
+  Agent workspace plan as CSV text, for a range of UTC days. Without the plan they raise `ScopeError`
+  with the code `workspace_required`.
+- A test quote is free. Its `live_amount_micro` says what the same fax costs with a live key.
 - `one_time_sends.preview(file=...)` counts the pages of a document before any order exists, with no key.
   `one_time_sends.check_cover(message=...)` says whether a cover message fits on its page.
 - `billing.get_topup_session(id, check_checkout=True)` asks Stripe about the hosted Checkout of an open
@@ -129,7 +135,7 @@ each call needs.
 | `ffa.inbox` | `list`, `iter`, `get`, `update`, `delete`, `get_download`, `download` |
 | `ffa.numbers` | `coverage`, `inventory`, `create_order`, `list_orders`, `get_order`, `dismiss_order`, `list`, `get`, `update`, `release`, `check_portability`, `list_port_orders`, `create_port_order`, `get_port_order`, `create_port_out_request`, `verify_sender` |
 | `ffa.extractions` | `create`, `list`, `iter`, `get`, `correct`, `classify`, `list_classifications`, `iter_classifications`, `get_classification`, `summarize`, `list_summaries`, `iter_summaries`, `get_summary`, `list_schemas`, `create_schema`, `get_schema` |
-| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `list_data_requests`, `withdraw_data_deletion`, `download_export_archive` |
+| `ffa.organizations` | `list`, `current`, `update_current`, `request_data_export`, `request_data_deletion`, `list_data_requests`, `withdraw_data_deletion`, `download_export_archive`, `fax_history_csv`, `audit_csv` |
 | `ffa.members` | `list`, `update`, `remove`, `list_invitations`, `invite`, `resend_invitation`, `link_invitation`, `revoke_invitation` |
 | `ffa.oauth` | `list_grants`, `iter_grants`, `revoke_grant` |
 | `ffa.one_time_sends` | `config`, `preview`, `check_cover`, `create`, `create_from_quote`, `list`, `iter`, `get`, `get_page`, `wait`, `checkout`, `read_by_token`, `confirm`, `resend_confirmation`, `get_receipt_pdf` |
@@ -225,6 +231,11 @@ with Client(keyless=True) as ffa:                 # no API key: only one_time_se
 `done`, or until the step you pass as `until`. The card is held at checkout. A failed fax costs nothing,
 and a fax that stops part way costs the price of the pages the carrier confirms.
 
+A person at Fax for Agents can refund an order or release the hold on its card. The order then reads
+`refunding` until the refund is confirmed and `refunded` after. It reads `canceled` when the hold was
+released and nothing was charged. `refund_pending_micro` is a refund the payment provider has not
+confirmed yet.
+
 The status token goes in the `X-FFA-Order-Token` header. It reads the order, opens its checkout, mails
 the confirmation again and downloads the receipt. A client with a live key of the order's organization
 needs no token. A test key is refused: an order is always live.
@@ -300,7 +311,7 @@ Every command takes `--json` for the raw answer.
 ## Prices
 
 Price card launch-v3 is effective from 2026-11-12. $0.039 per page sent, $0.019 per page received.
-$2 per number per month, $19 per month for the Agent workspace. Sandbox pages cost 0.
+$2 per number per month, $19 per month for the Agent workspace. With a test key, every page costs 0.
 `ffa.platform.capabilities()` returns the card in force. One fax by card has its own price:
 `ffa.one_time_sends.config()` returns it.
 
@@ -315,13 +326,14 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.20.11. It has the same 163 operations and no schema that document lacks.
+`spec/openapi.yaml` follows the public document at API version 1.21.0. It has the same 165 operations and no schema that document lacks.
 It also declares fields a route returns beyond the public schemas, in `InboxItemSummary` and `ExtractionPage`.
 0.5.0 removed the two validation error schemas, because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
 0.8.0 replaced five fields it had declared itself with the public ones, such as `Quote.policy_evaluation`.
 0.9.0 leaves `Delivery.webhook_deleted` optional, where the public document requires it.
 0.10.0 removed the 70 schemas of earlier server documents that no operation reaches, such as those of the admin console.
+0.11.0 leaves `SubscriptionList.plan` optional, where the public document requires it.
 `scripts/gen_models.py` writes a model only for a schema an operation reaches, through its paths, a shared response or a field.
 If a refresh brings in a schema that no operation reaches, it gets no model and `tests/test_removed_models.py` fails.
 To refresh it, merge the public document while preserving existing declarations, then run `uv run python scripts/gen_models.py`.

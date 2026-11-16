@@ -17,6 +17,7 @@ from faxforagents import (
     NotFoundError,
     PaymentRequiredError,
     ServerError,
+    models,
 )
 from tests.conftest import BASE, KEY, error
 
@@ -478,3 +479,23 @@ def test_cover_check_refuses_a_field_over_the_limit_of_the_create(
         keyless.one_time_sends.check_cover(message="x" * 2001)
     assert exc.value.status == 422 and exc.value.details == {"field": "cover"}
     assert len(json.loads(route.calls.last.request.content)["message"]) == 2001
+
+
+def test_a_refunded_or_canceled_order_is_done(keyless: Client, api: respx.MockRouter) -> None:
+    """API 1.21.0: a person at Fax for Agents refunds an order or releases its hold. Refunding waits."""
+    paid = CASES["captured"]["captured_micro"]
+    refunding = {**CASES["captured"], "status": "refunding", "next": "wait", "refund_pending_micro": paid}
+    refunded = {**CASES["captured"], "status": "refunded", "next": "done", "refunded_micro": paid}
+    route = api.get(f"/v1/one-time-sends/{ORDER}").mock(
+        side_effect=[httpx.Response(200, json=refunding), httpx.Response(200, json=refunded)]
+    )
+    order = keyless.one_time_sends.wait(ORDER, order_token=TOKEN, interval=0.0)
+    assert order.status == "refunded" and order.next == "done"
+    assert order.refunded_micro == paid and order.refund_pending_micro == 0
+    assert route.call_count == 2
+    first = models.OneTimeOrder.model_validate(refunding)
+    assert first.status == "refunding" and first.refund_pending_micro == paid
+    canceled = {**CASES["awaiting_confirmation"], "status": "canceled", "next": "done"}
+    assert models.OneTimeOrder.model_validate(canceled).captured_micro == 0
+    older = {k: v for k, v in CASES["captured"].items() if k != "refund_pending_micro"}
+    assert models.OneTimeOrder.model_validate(older).refund_pending_micro == 0
