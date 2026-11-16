@@ -315,3 +315,34 @@ async def test_async_records_export_created_range_and_workspace_plan(
     }
     api.get("/v1/subscriptions").respond(200, json={"items": [], "workspace": False})
     assert (await aclient.billing.list_subscriptions()).plan is None
+
+
+async def test_async_subscription_end_and_second_checkout(
+    aclient: AsyncClient, api: respx.MockRouter
+) -> None:
+    """API 1.21.2 on the async client: ends_at on a subscription and the reason of a second checkout."""
+    end = "2026-12-16T23:23:27.000Z"
+    item = {
+        "id": "sub_1",
+        "product": "workspace_monthly",
+        "status": "active",
+        "stripe_subscription_id": "sub_fixture",
+        "stripe_price_id": "price_workspace_monthly_test",
+        "cancel_at_period_end": True,
+        "cancel_at": None,
+        "ends_at": end,
+        "current_period_end": end,
+        "entitled": True,
+        "created_at": "2026-11-16T23:23:27.000Z",
+        "updated_at": "2026-11-16T23:23:27.000Z",
+        "canceled_at": None,
+    }
+    api.get("/v1/subscriptions").respond(200, json={"items": [item], "workspace": True})
+    listed = await aclient.billing.list_subscriptions()
+    assert listed.items[0].ends_at == end and listed.items[0].cancel_at is None
+    api.post("/v1/subscriptions/checkout").respond(
+        409, json=error("conflict", "already active", details={"reason": "plan_active"})
+    )
+    with pytest.raises(ConflictError) as exc:
+        await aclient.billing.create_subscription_checkout()
+    assert exc.value.reason == "plan_active"

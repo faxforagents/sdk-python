@@ -94,6 +94,9 @@ The same in async form, with `AsyncClient` and `await` on every call.
   Agent workspace plan as CSV text, for a range of UTC days. Without the plan they raise `ScopeError`
   with the code `workspace_required`.
 - A test quote is free. Its `live_amount_micro` says what the same fax costs with a live key.
+- `billing.list_subscriptions()` names `ends_at` on each subscription, when the Agent workspace ends without
+  another charge. A second `billing.create_subscription_checkout()` raises `ConflictError`, whose `reason`
+  is `plan_active` or `checkout_open`.
 - `one_time_sends.preview(file=...)` counts the pages of a document before any order exists, with no key.
   `one_time_sends.check_cover(message=...)` says whether a cover message fits on its page.
 - `billing.get_topup_session(id, check_checkout=True)` asks Stripe about the hosted Checkout of an open
@@ -172,7 +175,8 @@ not reached.
 
 `NotFoundError.field` names the id that was not found when the API says which: on a quote it is
 `document_id` or `from`. `ConflictError.state` is the state of a fax whose receipt was asked for
-before the fax ended. Both are `None` when the API sent no such detail.
+before the fax ended. `ConflictError.reason` says why a call was refused, such as `checkout_open` when a
+payment page of the Agent workspace is still open. Each is `None` when the API sent no such detail.
 
 Every refusal is the same envelope, a 422 for a field that fails validation included. A 413
 `payload_too_large` is a plain `APIError`: the body is over the limit of its route. The published
@@ -326,7 +330,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.21.0. It has the same 165 operations and no schema that document lacks.
+`spec/openapi.yaml` follows the public document at API version 1.21.2. It has the same 165 operations and no schema that document lacks.
 It also declares fields a route returns beyond the public schemas, in `InboxItemSummary` and `ExtractionPage`.
 0.5.0 removed the two validation error schemas, because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.
@@ -334,6 +338,7 @@ It also declares fields a route returns beyond the public schemas, in `InboxItem
 0.9.0 leaves `Delivery.webhook_deleted` optional, where the public document requires it.
 0.10.0 removed the 70 schemas of earlier server documents that no operation reaches, such as those of the admin console.
 0.11.0 leaves `SubscriptionList.plan` optional, where the public document requires it.
+0.11.1 leaves `Subscription.cancel_at` and `Subscription.ends_at` optional, where the public document requires them.
 `scripts/gen_models.py` writes a model only for a schema an operation reaches, through its paths, a shared response or a field.
 If a refresh brings in a schema that no operation reaches, it gets no model and `tests/test_removed_models.py` fails.
 To refresh it, merge the public document while preserving existing declarations, then run `uv run python scripts/gen_models.py`.

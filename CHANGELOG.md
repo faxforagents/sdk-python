@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.11.1 (2026-11-17)
+
+Follows API 1.21.2. The saved spec has 165 operations and 175 schemas, as in 0.11.0, and the models are regenerated from it.
+No method or argument changed, and nothing is removed.
+
+New fields:
+
+- `Subscription.cancel_at` is when Stripe is set to end the subscription. A cancel in the billing portal sets it and leaves `cancel_at_period_end` false.
+- `Subscription.ends_at` is when the plan ends without another charge. It is `None` while the plan renews.
+- The public document requires both. The saved spec leaves them optional, so an older payload still parses. Both default to `None`.
+
+`OneTimeConfirmSummary.state` reads `link_canceled` for the confirm link of an order that was canceled.
+
+`ConflictError.reason` reads `details["reason"]`, or `None` when the API sent none.
+A second `billing.create_subscription_checkout` raises `ConflictError` with the reason `plan_active` while the plan is active.
+The reason is `checkout_open` while a payment page of the plan is still open, and `details["url"]` is that page.
+
+The generated `OneTimeOrder` docstring follows the public document, which splits it into shorter sentences.
+
 ## 0.11.0 (2026-11-16)
 
 Follows API 1.21.0. The saved spec has 165 operations and 175 schemas, and the models are regenerated from it.

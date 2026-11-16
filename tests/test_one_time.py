@@ -277,6 +277,16 @@ def test_get_by_token_and_confirm(keyless: Client, api: respx.MockRouter) -> Non
     assert json.loads(route.calls.last.request.content) == {"token": "mail-token"}
 
 
+def test_the_link_of_a_canceled_order(keyless: Client, api: respx.MockRouter) -> None:
+    """API 1.21.2: the confirm link of an order that was canceled reads link_canceled."""
+    canceled = {**CASES["by_token"], "state": "link_canceled", "status": "canceled"}
+    api.post("/v1/one-time-sends/by-token").respond(200, json=canceled)
+    summary = keyless.one_time_sends.read_by_token("mail-token")
+    assert summary.state == "link_canceled" and summary.status == "canceled"
+    with pytest.raises(ValueError):
+        models.OneTimeConfirmSummary.model_validate({**canceled, "state": "link_withdrawn"})
+
+
 def test_resend_confirmation(keyless: Client, api: respx.MockRouter) -> None:
     route = api.post(f"/v1/one-time-sends/{ORDER}/resend-confirmation").respond(
         200, json=CASES["awaiting_confirmation"]

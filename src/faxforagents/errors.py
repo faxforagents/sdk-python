@@ -86,6 +86,17 @@ class ConflictError(APIError):
         value = self.details.get("state") if isinstance(self.details, dict) else None
         return value if isinstance(value, str) else None
 
+    @property
+    def reason(self) -> str | None:
+        """``details["reason"]``: why the call was refused, else ``None``.
+
+        ``billing.create_subscription_checkout`` names ``plan_active`` while the Agent workspace is active.
+        It names ``checkout_open`` while a payment page of the plan is still open. Then ``details["url"]``
+        is that page and ``details["expires_at"]`` is when it closes. The checkout sends a reason since API
+        1.21.2. Other routes name their own, such as ``webhook_deleted`` on a delivery replay."""
+        value = self.details.get("reason") if isinstance(self.details, dict) else None
+        return value if isinstance(value, str) else None
+
 
 class OneTimeOffer(TypedDict, total=False):
     """``details["one_time_offer"]`` of 402 insufficient_balance: the card path for this exact send.
