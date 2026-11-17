@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run it replaces. Every other run has a group of its own.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: py${{ matrix.python }} on ${{ matrix.os }}
@@ -19,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python: ["3.10", "3.11", "3.12", "3.13"]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         include:
           - os: macos-latest
             python: "3.12"
@@ -30,6 +35,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - run: pip install -e ".[dev,cli]"
       - name: Unit tests (the live test skips without a key)
         run: pytest -q -m "not live"
@@ -42,6 +49,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - run: pip install -e ".[dev,cli]"
       - run: ruff check src tests
       - run: ruff format --check src tests
