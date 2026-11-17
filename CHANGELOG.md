@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The package lists Python 3.14 among its classifiers, and CI runs the unit tests on 3.14.
+
 ## 0.11.2 (2026-11-17)
 
 Follows API 1.21.3. The saved spec has 165 operations and 175 schemas, as in 0.11.1, and the models are regenerated from it.
