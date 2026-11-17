@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.21.0.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.21.2.
 # An operation reaches every schema here. 0.10.0 dropped 70 earlier schemas that no operation reached.
 # Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
@@ -27,7 +27,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.21.0
+  version: 1.21.2
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -3648,6 +3648,8 @@ paths:
       tags:
       - billing
       summary: Open a hosted Checkout for the Agent workspace subscription
+      description: Answers the address of Stripe's payment page for the plan. It is refused with 409 while the plan
+        is active or a Checkout of it is still open, so the plan is never paid twice.
       operationId: create_subscription_checkout
       responses:
         '201':
@@ -3672,7 +3674,15 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: 'The plan cannot be bought twice. error.code is conflict and error.details.reason says why.
+            "plan_active": the Agent workspace is active, here or at Stripe after a payment of a moment ago. "checkout_open":
+            a Checkout of the plan is still open, and error.details.url is its page, error.details.expires_at when
+            it closes. idempotency_key_conflict: the Idempotency-Key was used with a different request, or that
+            request is still being processed.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '410':
           $ref: '#/components/responses/Gone'
         '422':
@@ -4413,10 +4423,10 @@ paths:
       tags:
       - organizations
       summary: 'The fax history as CSV: every fax sent and received in the range'
-      description: 'One line per fax of the key''s environment, sent and received, oldest first. A sent fax counts
-        by when it was created and a received one by when it arrived. The lines carry what each fax cost the wallet,
-        never the document or its text. A range of more than 20000 lines answers 422: choose fewer days. Needs the
-        scopes fax:read and inbox:read.'
+      description: 'Needs two scopes: fax:read, which x-required-scope names, and inbox:read as well. One line per
+        fax of the key''s environment, sent and received, oldest first. A sent fax counts by when it was created
+        and a received one by when it arrived. The lines carry what each fax cost the wallet, never the document
+        or its text. A range of more than 20000 lines answers 422: choose fewer days.'
       operationId: get_fax_history_csv
       parameters:
       - name: from
@@ -4449,9 +4459,10 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: error.code is workspace_required while the organization's Agent workspace plan is not active
+          description: 'error.code is workspace_required while the organization''s Agent workspace plan is not active
             and ended more than 30 days ago, or never started. error.details.ended_at is when it ended and error.details.closed_at
-            when the export closed. scope_missing names a scope the credential lacks.
+            when the export closed. scope_missing names a scope the credential lacks: fax:read, or inbox:read, which
+            this export needs as well.'
           content:
             application/json:
               schema:
@@ -8984,8 +8995,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: The link was already used (link_used), expired (link_expired), or the browser is signed in
-            as someone else (link_other_session).
+          description: The link was already used (link_used), its order was canceled and the hold released (link_canceled),
+            it expired (link_expired), or the browser is signed in as someone else (link_other_session).
           content:
             application/json:
               schema:
@@ -13515,6 +13526,7 @@ components:
           enum:
           - ok
           - link_used
+          - link_canceled
           - link_expired
           title: State
         status:
@@ -13575,7 +13587,8 @@ components:
       title: OneTimeConfirmSummary
       description: |-
         What the confirm page shows before the click. ``state`` is ``ok`` while the link can still be used,
-        else ``link_used`` or ``link_expired``. Reading it consumes nothing.
+        else ``link_used``, ``link_canceled`` (the order was canceled and its hold released) or
+        ``link_expired``. Reading it consumes nothing.
     OneTimeConfirmed:
       properties:
         order:
@@ -14134,9 +14147,9 @@ components:
         ``confirm`` (click the mailed link), ``wait`` (read again later) or ``done``. Money is integer
         micro-USD. The field ``captured_micro`` is what the card was charged, written only once the payment
         provider confirmed it. The field ``fax`` is the fax job once the order was released, with the
-        carrier's evidence once it has any. Three statuses come from a person at Fax for Agents: ``refunding``
-        (a refund is on its way to the card), ``refunded`` (the whole charge went back) and ``canceled`` (the
-        order was canceled and the hold on the card released, nothing charged).
+        carrier's evidence once it has any. Three statuses come from a person at Fax for Agents. With
+        ``refunding`` a refund is on its way to the card, and with ``refunded`` the whole charge went back. With
+        ``canceled`` the order was canceled and the hold on the card released, so nothing was charged.
     OneTimeOrderCreated:
       properties:
         id:
@@ -16219,6 +16232,21 @@ components:
         cancel_at_period_end:
           type: boolean
           title: Cancel At Period End
+        cancel_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cancel At
+          description: When Stripe is set to end the subscription. A cancel in the billing portal sets it to the
+            end of the period and leaves cancel_at_period_end false.
+        ends_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ends At
+          description: When the subscription ends without being charged again. That is cancel_at when it comes no
+            later than current_period_end, or current_period_end after a cancel at the period's end. Null while
+            it renews.
         current_period_end:
           anyOf:
           - type: string

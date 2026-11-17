@@ -760,7 +760,11 @@ class Billing(_Resource):
         return self._h.request("GET", f"/v1/invoices/{invoice_id}/receipt", model=m.PaymentReceipt)
 
     def create_subscription_checkout(self, *, idempotency_key: str | None = None) -> m.SubscriptionCheckout:
-        """A hosted Checkout for the Agent workspace subscription. Scope: billing:write."""
+        """A hosted Checkout for the Agent workspace subscription. Scope: billing:write.
+
+        ``url`` is Stripe's payment page for the plan. While the plan is active, or a payment page of it is
+        still open, this raises ``ConflictError``, so the plan is never paid twice. Its ``reason`` is
+        ``plan_active`` or ``checkout_open``. With ``checkout_open``, ``details["url"]`` is the open page."""
         return self._h.request(
             "POST",
             "/v1/subscriptions/checkout",
@@ -774,7 +778,11 @@ class Billing(_Resource):
 
         ``plan`` says what the Agent workspace gives and where the organization stands with it. It names
         the request limit, the included number, how long records are kept and whether the records export
-        is open. It is ``None`` from a server older than API 1.21.0."""
+        is open. It is ``None`` from a server older than API 1.21.0.
+
+        Each subscription names ``cancel_at``, the end date Stripe holds, and ``ends_at``, when the plan ends
+        without another charge. ``ends_at`` is ``None`` while the plan renews and once it no longer
+        entitles. Both are ``None`` from a server older than API 1.21.2."""
         return self._h.request("GET", "/v1/subscriptions", model=m.SubscriptionList)
 
     def create_portal_session(self, *, idempotency_key: str | None = None) -> m.PortalSession:
@@ -1907,9 +1915,10 @@ class OneTimeSends(_Resource):
         return self._h.request("GET", f"/v1/one-time-sends/by-token/{token}", model=m.OneTimeConfirmSummary)
 
     def confirm(self, order_id: str, *, token: str) -> m.OneTimeConfirmed:
-        """Confirm the order with the token of the mailed link. The fax is released. No key needed.
+        """Confirm the order with the token of the mailed link. The fax is released. It takes no API key.
 
-        The link works once. A repeat answers 409 ``link_used`` and sends nothing."""
+        The link works once. A repeat answers 409 ``link_used`` and sends nothing. The link of an order
+        that was canceled answers 409 ``link_canceled``, since API 1.21.2."""
         return self._h.request(
             "POST",
             f"/v1/one-time-sends/{order_id}/confirm",

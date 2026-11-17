@@ -13,6 +13,7 @@ import respx
 from faxforagents import (
     AsyncClient,
     Client,
+    ConflictError,
     InvalidRequestError,
     NotFoundError,
     PaymentRequiredError,
@@ -275,6 +276,22 @@ def test_get_by_token_and_confirm(keyless: Client, api: respx.MockRouter) -> Non
     assert done.order.next == "wait"
     assert done.signed_in is False
     assert json.loads(route.calls.last.request.content) == {"token": "mail-token"}
+
+
+def test_the_link_of_a_canceled_order(keyless: Client, api: respx.MockRouter) -> None:
+    """API 1.21.2: the confirm link of a canceled order reads link_canceled, and confirms no more."""
+    canceled = {**CASES["by_token"], "state": "link_canceled", "status": "canceled"}
+    api.post("/v1/one-time-sends/by-token").respond(200, json=canceled)
+    summary = keyless.one_time_sends.read_by_token("mail-token")
+    assert summary.state == "link_canceled" and summary.status == "canceled"
+    with pytest.raises(ValueError):
+        models.OneTimeConfirmSummary.model_validate({**canceled, "state": "link_withdrawn"})
+    api.post(f"/v1/one-time-sends/{ORDER}/confirm").respond(
+        409, json=error("link_canceled", "this order was canceled, and the hold on the card is released")
+    )
+    with pytest.raises(ConflictError) as exc:
+        keyless.one_time_sends.confirm(summary.order_id, token="mail-token")
+    assert exc.value.code == "link_canceled" and exc.value.status == 409
 
 
 def test_resend_confirmation(keyless: Client, api: respx.MockRouter) -> None:

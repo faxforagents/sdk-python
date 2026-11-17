@@ -1243,6 +1243,93 @@ def test_the_subscription_list_carries_the_workspace_plan(client: Client, api: r
         models.WorkspacePlan.model_validate({k: v for k, v in workspace_plan().items() if k != "export_open"})
 
 
+def subscription(**over: object) -> dict[str, object]:
+    """A subscription as ``sub_json`` of billing/subscriptions.py writes it at API 1.21.2."""
+    return {
+        "id": "sub_1",
+        "product": "workspace_monthly",
+        "status": "active",
+        "stripe_subscription_id": "sub_fixture",
+        "stripe_price_id": "price_workspace_monthly_test",
+        "cancel_at_period_end": False,
+        "cancel_at": None,
+        "ends_at": None,
+        "current_period_end": "2026-12-16T23:23:27.000Z",
+        "entitled": True,
+        "created_at": "2026-11-16T23:23:27.000Z",
+        "updated_at": "2026-11-16T23:23:27.000Z",
+        "canceled_at": None,
+        **over,
+    }
+
+
+def test_a_subscription_says_when_it_ends(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.2: cancel_at and ends_at. A cancel in the billing portal sets cancel_at, not the flag."""
+    end = "2026-12-16T23:23:27.000Z"
+    renewing = {k: v for k, v in subscription().items() if k not in ("cancel_at", "ends_at")}
+    route = api.get("/v1/subscriptions")
+    route.side_effect = [
+        httpx.Response(
+            200,
+            json={
+                "items": [subscription(cancel_at=end, ends_at=end), subscription(id="sub_2")],
+                "workspace": True,
+                "plan": workspace_plan(),
+            },
+        ),
+        httpx.Response(200, json={"items": [renewing], "workspace": True}),
+    ]
+    ending, renews = client.billing.list_subscriptions().items
+    assert ending.cancel_at_period_end is False
+    assert ending.cancel_at == end and ending.ends_at == end
+    assert renews.cancel_at is None and renews.ends_at is None
+    older = client.billing.list_subscriptions().items[0]
+    assert older.cancel_at is None and older.ends_at is None and older.entitled is True
+
+
+def test_the_plan_is_never_bought_twice(client: Client, api: respx.MockRouter) -> None:
+    """API 1.21.2: a second checkout of the plan answers 409 conflict, and details.reason says why."""
+    page = "https://checkout.stripe.com/c/pay/cs_test_fixture"
+    route = api.post("/v1/subscriptions/checkout")
+    route.side_effect = [
+        httpx.Response(
+            409,
+            json=error(
+                "conflict",
+                "The Agent workspace is already active for this organization.",
+                details={"reason": "plan_active"},
+            ),
+        ),
+        httpx.Response(
+            409,
+            json=error(
+                "conflict",
+                "A payment page for the Agent workspace is already open.",
+                details={"reason": "checkout_open", "url": page, "expires_at": "2026-11-17T23:23:27.000Z"},
+            ),
+        ),
+        httpx.Response(
+            201,
+            json={"url": page, "stripe_session_id": "cs_test_fixture", "product": "workspace_monthly"},
+        ),
+    ]
+    with pytest.raises(ConflictError) as active:
+        client.billing.create_subscription_checkout()
+    assert active.value.code == "conflict" and active.value.reason == "plan_active"
+    assert active.value.state is None and active.value.retryable is False
+    with pytest.raises(ConflictError) as open_page:
+        client.billing.create_subscription_checkout()
+    assert open_page.value.reason == "checkout_open"
+    assert open_page.value.details["url"] == page
+    assert open_page.value.details["expires_at"] == "2026-11-17T23:23:27.000Z"
+    assert client.billing.create_subscription_checkout().url == page
+    assert len(route.calls) == 3
+    # a refusal with no details, or a reason that is not a string, has no reason
+    assert ConflictError(status=409, code="quote_consumed", message="used").reason is None
+    assert ConflictError(status=409, code="conflict", message="x", details={"reason": 7}).reason is None
+    assert ConflictError(status=409, code="conflict", message="x", details=["plan_active"]).reason is None
+
+
 def test_the_number_the_workspace_pays_for(client: Client, api: respx.MockRouter) -> None:
     """API 1.21.0: included_with_workspace marks the number whose monthly charge the plan pays."""
     route = api.get("/v1/numbers/num_1")
