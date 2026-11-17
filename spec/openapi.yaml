@@ -1,4 +1,4 @@
-# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.21.2.
+# Fax for Agents API, refreshed from the public document of https://github.com/faxforagents/openapi at API 1.21.3.
 # An operation reaches every schema here. 0.10.0 dropped 70 earlier schemas that no operation reached.
 # Existing SDK routes, model names and serializer additions are retained.
 openapi: 3.1.0
@@ -27,7 +27,7 @@ info:
   x-logo:
     url: https://faxforagents.com/brand/logo-512.png
     altText: Fax for Agents
-  version: 1.21.2
+  version: 1.21.3
 servers:
 - url: https://api.faxforagents.com
   description: Production (live and test keys)
@@ -16246,7 +16246,7 @@ components:
           title: Ends At
           description: When the subscription ends without being charged again. That is cancel_at when it comes no
             later than current_period_end, or current_period_end after a cancel at the period's end. Null while
-            it renews.
+            it renews, and whenever entitled is false, as after it ended.
         current_period_end:
           anyOf:
           - type: string
