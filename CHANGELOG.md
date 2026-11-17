@@ -8,7 +8,7 @@ No method or argument changed, and nothing is removed.
 New fields:
 
 - `Subscription.cancel_at` is when Stripe is set to end the subscription. A cancel in the billing portal sets it and leaves `cancel_at_period_end` false.
-- `Subscription.ends_at` is when the plan ends without another charge. It is `None` while the plan renews.
+- `Subscription.ends_at` is when the plan ends without another charge. It is `None` while the plan renews, and once the plan has ended.
 - The public document requires both. The saved spec leaves them optional, so an older payload still parses. Both default to `None`.
 
 `OneTimeConfirmSummary.state` reads `link_canceled` for the confirm link of an order that was canceled.
