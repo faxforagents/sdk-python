@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.2 (2026-11-17)
+
+Follows API 1.21.3. The saved spec has 165 operations and 175 schemas, as in 0.11.1, and the models are regenerated from it.
+No method, argument or field changed.
+
+- The generated docstring of `Subscription.ends_at` says it is `None` whenever `entitled` is false, as after the plan ended.
+  The server sent that at 1.21.2 already.
+- The package metadata names its licence as `License-Expression: MIT`, from `license = "MIT"` and `license-files` (PEP 639).
+  The licence classifier is gone, and the build needs hatchling 1.27 or later.
+- The Documentation link of the package points at https://faxforagents.com/docs/sdks/python/.
+
 ## 0.11.1 (2026-11-17)
 
 Follows API 1.21.2. The saved spec has 165 operations and 175 schemas, as in 0.11.0, and the models are regenerated from it.

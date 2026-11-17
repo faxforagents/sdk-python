@@ -330,7 +330,7 @@ ruff check src tests && mypy src
 sh scripts/truthcheck.sh
 ```
 
-`spec/openapi.yaml` follows the public document at API version 1.21.2. It has the same 165 operations and no schema that document lacks.
+`spec/openapi.yaml` follows the public document at API version 1.21.3. It has the same 165 operations and no schema that document lacks.
 It also declares fields a route returns beyond the public schemas, in `InboxItemSummary` and `ExtractionPage`.
 0.5.0 removed the two validation error schemas, because the server never sent that shape.
 0.6.0 removed two cost fields of an extraction, because the server stopped sending them.

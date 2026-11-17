@@ -1,20 +1,20 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "faxforagents"
-version = "0.11.1"
+version = "0.11.2"
 description = "Python client for Fax for Agents: a fax API, a hosted MCP server and SDKs built so AI agents can send and receive faxes."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Fax for Agents", email = "hello@faxforagents.com" }]
 keywords = ["fax", "fax-api", "ai-agents", "mcp", "agents", "api-client", "sdk", "webhooks"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -49,7 +49,7 @@ faxforagents = "faxforagents.cli:main"
 
 [project.urls]
 Homepage = "https://faxforagents.com"
-Documentation = "https://faxforagents.com/docs"
+Documentation = "https://faxforagents.com/docs/sdks/python/"
 Pricing = "https://faxforagents.com/pricing"
 Dashboard = "https://app.faxforagents.com"
 Repository = "https://github.com/faxforagents/sdk-python"
